@@ -122,6 +122,11 @@ export async function POST(req: NextRequest) {
 
     if (!finalAnswer) finalAnswer = await generateFinalAnswer(messages)
 
+    // beopmang 호출이 있었으면 출처 강제 지정
+    if (debugCalls.length > 0) {
+      finalAnswer = finalAnswer.replace(/<source>.*?<\/source>/g, "<source>api.beopmang.org<\/source>")
+    }
+
     return NextResponse.json({ answer: finalAnswer, debug: debugCalls })
   } catch (err: unknown) {
     console.error('[chat] error:', JSON.stringify(err, null, 2))

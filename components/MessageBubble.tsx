@@ -26,6 +26,85 @@ function highlightArticles(text: string): string {
     .replace(/제(\d+)호/g, (m) => `**${m}**`)
 }
 
+function formatResult(raw: string): string {
+  try { return JSON.stringify(JSON.parse(raw), null, 2) }
+  catch { return raw }
+}
+
+function DebugPanel({ calls }: { calls: DebugCall[] }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
+
+  return (
+    <div className="mt-2 rounded-xl overflow-hidden text-xs"
+      style={{ border: '1px solid #C6E89A', background: '#F7FCF0' }}>
+
+      {/* 요약 헤더 */}
+      <div className="px-3 py-2 flex items-center gap-2"
+        style={{ background: '#EDF7DC', borderBottom: '1px solid #DCF0C0' }}>
+        <span style={{ color: '#3A7D1E', fontWeight: 600 }}>api.beopmang.org 호출 내역</span>
+        <span style={{ color: '#6B9A3E' }}>총 {calls.length}회</span>
+      </div>
+
+      {/* 호출 목록 */}
+      {calls.map((call, i) => {
+        const isOpen = openIndex === i
+        let parsedResult: unknown = null
+        try { parsedResult = JSON.parse(call.result) } catch { /* raw */ }
+
+        // 결과 요약 (법령명, 조문 수 등)
+        let summary = ''
+        if (parsedResult && typeof parsedResult === 'object') {
+          const r = parsedResult as Record<string, unknown>
+          if (r.law_name) summary = `→ ${r.law_name}`
+          else if (r.total !== undefined) summary = `→ 총 ${r.total}건`
+          else if (Array.isArray(r.results)) summary = `→ ${(r.results as unknown[]).length}개 법령`
+          else if (Array.isArray(r.articles)) summary = `→ ${(r.articles as unknown[]).length}개 조문`
+        }
+
+        return (
+          <div key={i} style={{ borderBottom: i < calls.length - 1 ? '1px solid #DCF0C0' : 'none' }}>
+            {/* 호출 헤더 — 클릭으로 펼치기 */}
+            <button
+              onClick={() => setOpenIndex(isOpen ? null : i)}
+              className="w-full text-left px-3 py-2 flex items-center gap-2 font-mono transition-all"
+              style={{ background: isOpen ? '#E4F5CC' : 'transparent' }}
+            >
+              <span style={{ color: '#3A7D1E', fontWeight: 700, minWidth: 20 }}>#{i + 1}</span>
+              <span style={{ color: '#1A3A1E', fontWeight: 600 }}>{call.command}</span>
+              <span style={{ color: '#6B9A3E', flex: 1 }}>
+                {JSON.stringify(call.params)}
+              </span>
+              {summary && (
+                <span style={{ color: '#3A7D1E', fontWeight: 500 }}>{summary}</span>
+              )}
+              <span style={{ color: '#A8C87A', marginLeft: 4 }}>{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {/* 전체 결과 — 펼쳤을 때 */}
+            {isOpen && (
+              <pre
+                className="px-3 py-3 overflow-x-auto whitespace-pre-wrap break-all"
+                style={{
+                  color: '#2D3A1E',
+                  background: '#F0F9E4',
+                  borderTop: '1px solid #DCF0C0',
+                  margin: 0,
+                  fontSize: '11px',
+                  lineHeight: 1.6,
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                }}
+              >
+                {formatResult(call.result)}
+              </pre>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function MessageBubble({ message }: { message: Message }) {
   const [debugOpen, setDebugOpen] = useState(false)
 
@@ -51,7 +130,6 @@ export function MessageBubble({ message }: { message: Message }) {
         법
       </div>
       <div className="flex-1 max-w-[85%]">
-        {/* 답변 */}
         <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
           style={{ background: '#fff', border: '1px solid #E2DDD5' }}>
           <div className="prose-legal">
@@ -61,7 +139,6 @@ export function MessageBubble({ message }: { message: Message }) {
           </div>
         </div>
 
-        {/* 출처 + 디버그 토글 */}
         <div className="mt-1.5 flex items-center justify-between gap-2">
           {hasDebug && (
             <button
@@ -73,7 +150,7 @@ export function MessageBubble({ message }: { message: Message }) {
                 border: '1px solid #C6E89A',
               }}
             >
-              {debugOpen ? '▲ 법망 데이터 숨기기' : '▼ 법망 데이터 보기'} ({message.debug!.length}회 호출)
+              {debugOpen ? '▲ 닫기' : '▼ 법망 호출 내역'} ({message.debug!.length}회)
             </button>
           )}
           {source && (
@@ -88,31 +165,7 @@ export function MessageBubble({ message }: { message: Message }) {
           )}
         </div>
 
-        {/* 디버그 패널 */}
-        {debugOpen && hasDebug && (
-          <div className="mt-2 rounded-xl overflow-hidden text-xs"
-            style={{ border: '1px solid #C6E89A', background: '#F7FCF0' }}>
-            {message.debug!.map((call, i) => (
-              <div key={i} style={{ borderBottom: i < message.debug!.length - 1 ? '1px solid #DCF0C0' : 'none' }}>
-                {/* 호출 헤더 */}
-                <div className="px-3 py-2 flex items-center gap-2 font-mono"
-                  style={{ background: '#EDF7DC', borderBottom: '1px solid #DCF0C0' }}>
-                  <span style={{ color: '#3A7D1E', fontWeight: 600 }}>#{i + 1}</span>
-                  <span style={{ color: '#1A3A1E', fontWeight: 600 }}>{call.command}</span>
-                  <span style={{ color: '#6B9A3E' }}>{JSON.stringify(call.params)}</span>
-                </div>
-                {/* 결과 */}
-                <pre className="px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all"
-                  style={{ color: '#3D3A30', maxHeight: '200px', overflowY: 'auto', margin: 0 }}>
-                  {(() => {
-                    try { return JSON.stringify(JSON.parse(call.result), null, 2) }
-                    catch { return call.result }
-                  })()}
-                </pre>
-              </div>
-            ))}
-          </div>
-        )}
+        {debugOpen && hasDebug && <DebugPanel calls={message.debug!} />}
       </div>
     </div>
   )
