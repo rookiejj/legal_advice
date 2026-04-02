@@ -128,14 +128,12 @@ export default function Home() {
             answerReceived = true
             updateAsst(m => ({ ...m, content: data.text, loading: false }))
           } else if (event === 'error') {
-            console.error('[chat SSE error]', data)
             if (!isStopped()) setError(data.message || '서버 오류가 발생했습니다.')
           }
         }
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        console.error('[chat fetch error]', err)
         if (!isStopped()) setError(err instanceof Error ? err.message : '알 수 없는 오류')
       }
     }

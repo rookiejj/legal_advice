@@ -19,9 +19,8 @@ body {
   background-color: #ECF3E8;
   color: #1A1A1A;
   -webkit-font-smoothing: antialiased;
-  /* 인앱브라우저(카카오 등) 상단 UI 가림 방지 */
-  padding-top: env(safe-area-inset-top);
-  padding-top: constant(safe-area-inset-top);
+  /* 인앱브라우저(카카오 등) 뷰포트 대응 */
+  overscroll-behavior: none;
 }
 
 ::-webkit-scrollbar {
@@ -97,4 +96,10 @@ body {
   color: #3A7D1E;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* 인앱브라우저 뷰포트 높이 대응 */
+.h-screen {
+  height: 100vh;
+  height: 100dvh;
 }
