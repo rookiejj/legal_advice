@@ -18,6 +18,20 @@ function parseSource(content: string): { text: string; source: string | null } {
   }
 }
 
+// 제N조, 제N조의N, 제N항, 제N호 → **제N조** 볼드 처리
+function highlightArticles(text: string): string {
+  return text.replace(
+    /제(\d+)조(의\d+)?(\s*(제\d+항)?(\s*제\d+호)?)?/g,
+    (match) => `**${match}**`
+  ).replace(
+    /제(\d+)항/g,
+    (match) => `**${match}**`
+  ).replace(
+    /제(\d+)호/g,
+    (match) => `**${match}**`
+  )
+}
+
 export function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'user') {
     return (
@@ -34,6 +48,7 @@ export function MessageBubble({ message }: { message: Message }) {
 
   const { text, source } = parseSource(message.content)
   const isPrimary = source === 'api.beopmang.org'
+  const highlighted = highlightArticles(text)
 
   return (
     <div className="flex gap-3">
@@ -49,10 +64,11 @@ export function MessageBubble({ message }: { message: Message }) {
           style={{ background: '#fff', border: '1px solid #E2DDD5' }}
         >
           <div className="prose-legal">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {highlighted}
+            </ReactMarkdown>
           </div>
         </div>
-        {/* 출처 뱃지 */}
         {source && (
           <div className="mt-1.5 flex justify-end">
             <span
