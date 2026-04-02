@@ -21,10 +21,11 @@ function parseSource(content: string): { text: string; source: string | null } {
 }
 
 function highlightArticles(text: string): string {
+  // 이미 **볼드** 처리된 부분은 건너뜀
   return text
-    .replace(/제(\d+)조(의\d+)?/g, (m) => `**${m}**`)
-    .replace(/제(\d+)항/g, (m) => `**${m}**`)
-    .replace(/제(\d+)호/g, (m) => `**${m}**`)
+    .replace(/(?<!\*)제(\d+)조(의\d+)?(?!\*)/g, (m) => `**${m}**`)
+    .replace(/(?<!\*)제(\d+)항(?!\*)/g, (m) => `**${m}**`)
+    .replace(/(?<!\*)제(\d+)호(?!\*)/g, (m) => `**${m}**`)
 }
 
 function formatResult(raw: string): string {
@@ -116,7 +117,7 @@ export function MessageBubble({ message }: { message: Message }) {
         {/* 답변 또는 실패 메시지 */}
         {(text.trim() || showEmpty) && (
           <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
-            style={{ background: '#fff', border: '1px solid #E2DDD5' }}>
+            style={{ background: '#F7FAF4', border: '1px solid #D4E8C8' }}>
             {showEmpty ? (
               <p className="text-xs" style={{ color: '#A8A49C' }}>
                 답변을 받지 못했습니다. 아래 법망 호출 내역을 확인하세요.
@@ -172,7 +173,7 @@ export function TypingIndicator() {
         법
       </div>
       <div className="rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm"
-        style={{ background: '#fff', border: '1px solid #E2DDD5' }}>
+        style={{ background: '#F7FAF4', border: '1px solid #D4E8C8' }}>
         <p className="text-xs mb-2" style={{ color: '#A8E063', fontWeight: 600 }}>
           법령 조회 중 · 1분 내외 소요됩니다
         </p>

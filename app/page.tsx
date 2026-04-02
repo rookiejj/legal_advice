@@ -33,8 +33,13 @@ function buildFallbackAnswer(debugCalls: DebugCall[]): string {
 
       } else if (call.command === 'tools.overview' && data.law_name) {
         const snippets = (data.top_articles ?? [])
-          .map((a: { label: string; snippet: string }) => `**${a.label}** ${a.snippet}`)
-          .join('\n')
+          .map((a: { snippet: string }) => {
+            // snippet에 이미 조문 번호 포함 — 첫 괄호 닫기까지 볼드 처리
+            const s = a.snippet.trim()
+            const end = s.indexOf(')')
+            return end > 0 ? `**${s.slice(0, end + 1)}**${s.slice(end + 1)}` : s
+          })
+          .join('\n\n')
         if (snippets) sections.push(`### 「${data.law_name}」 (주요 조문)\n\n${snippets}`)
 
       } else if (call.command === 'law.search' && data.results?.length) {
