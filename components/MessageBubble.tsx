@@ -20,6 +20,13 @@ function parseSource(content: string): { text: string; source: string | null } {
   return { text: content.replace(/<source>.*?<\/source>/, '').trim(), source: match[1] }
 }
 
+// 잘린 마크다운 볼드 정리 (짝 안맞는 ** 제거)
+function cleanTruncated(text: string): string {
+  const count = (text.match(/\*\*/g) ?? []).length
+  if (count % 2 !== 0) return text.replace(/\*\*[^*]*$/, '') // 마지막 미완성 볼드 제거
+  return text
+}
+
 function highlightArticles(text: string): string {
   return text
     .replace(/(?<!\*\*)제(\d+)조(의\d+)?(?!\*\*)/g, (m) => `**${m}**`)
@@ -97,7 +104,8 @@ export function MessageBubble({ message }: { message: Message }) {
 
   // 에러 상태 체크 (content 원본 기준)
   const isErrorContent = message.content === '__error__'
-  const { text, source } = parseSource(isErrorContent ? '' : message.content)
+  const { text: rawText, source } = parseSource(isErrorContent ? '' : message.content)
+  const text = cleanTruncated(rawText)
   const isPrimary = source === 'api.beopmang.org'
   const hasDebug = message.debug && message.debug.length > 0
 
