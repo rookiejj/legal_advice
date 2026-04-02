@@ -31,14 +31,25 @@ export default function Home() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText }), // 히스토리 전달 없음
+        body: JSON.stringify({ message: userText }),
         signal: controller.signal,
       })
-      const data = await res.json()
+
+      // JSON 파싱 전 텍스트로 먼저 읽어서 에러 처리
+      const text = await res.text()
+      let data: { answer?: string; error?: string }
+      try {
+        data = JSON.parse(text)
+      } catch {
+        // JSON 파싱 실패 = 타임아웃 또는 서버 에러
+        throw new Error('응답 시간이 초과됐습니다. 질문을 더 짧게 입력하거나 잠시 후 다시 시도해주세요.')
+      }
+
       if (!res.ok) throw new Error(data.error || '서버 오류')
+
       setMessages((prev) => [
         ...prev,
-        { id: (Date.now() + 1).toString(), role: 'assistant', content: data.answer },
+        { id: (Date.now() + 1).toString(), role: 'assistant', content: data.answer! },
       ])
     } catch (err) {
       if ((err as Error).name === 'AbortError') return
