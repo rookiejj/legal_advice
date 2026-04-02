@@ -11,7 +11,7 @@ export type Message = {
   role: 'user' | 'assistant'
   content: string
   debug?: DebugCall[]
-  loading?: boolean  // 아직 응답 수신 중
+  loading?: boolean
 }
 
 function parseSource(content: string): { text: string; source: string | null } {
@@ -21,11 +21,10 @@ function parseSource(content: string): { text: string; source: string | null } {
 }
 
 function highlightArticles(text: string): string {
-  // 이미 **볼드** 처리된 부분은 건너뜀
   return text
-    .replace(/(?<!\*)제(\d+)조(의\d+)?(?!\*)/g, (m) => `**${m}**`)
-    .replace(/(?<!\*)제(\d+)항(?!\*)/g, (m) => `**${m}**`)
-    .replace(/(?<!\*)제(\d+)호(?!\*)/g, (m) => `**${m}**`)
+    .replace(/(?<!\*\*)제(\d+)조(의\d+)?(?!\*\*)/g, (m) => `**${m}**`)
+    .replace(/(?<!\*\*)제(\d+)항(?!\*\*)/g, (m) => `**${m}**`)
+    .replace(/(?<!\*\*)제(\d+)호(?!\*\*)/g, (m) => `**${m}**`)
 }
 
 function formatResult(raw: string): string {
@@ -69,10 +68,8 @@ function DebugPanel({ calls }: { calls: DebugCall[] }) {
             {isOpen && (
               <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap break-all"
                 style={{
-                  color: '#2D3A1E', background: '#F0F9E4',
-                  borderTop: '1px solid #DCF0C0', margin: 0,
-                  fontSize: '11px', lineHeight: 1.6,
-                  maxHeight: '400px', overflowY: 'auto',
+                  color: '#2D3A1E', background: '#F0F9E4', borderTop: '1px solid #DCF0C0',
+                  margin: 0, fontSize: '11px', lineHeight: 1.6, maxHeight: '400px', overflowY: 'auto'
                 }}>
                 {formatResult(call.result)}
               </pre>
@@ -98,14 +95,24 @@ export function MessageBubble({ message }: { message: Message }) {
     )
   }
 
-  const { text, source } = parseSource(message.content)
+  // 에러 상태 체크 (content 원본 기준)
+  const isErrorContent = message.content === '__error__'
+  const { text, source } = parseSource(isErrorContent ? '' : message.content)
   const isPrimary = source === 'api.beopmang.org'
   const hasDebug = message.debug && message.debug.length > 0
 
-  // 로딩 중이거나 content가 있으면 정상 — 로딩 끝난 후에도 비어있으면 실패
-  const showEmpty = !message.loading && !text.trim()
-  // 로딩 중이고 아직 아무것도 없으면 bubble 자체를 숨김 (TypingIndicator가 대신함)
-  if (message.loading && !text.trim() && !hasDebug) return null
+  // 로딩 중이고 아직 데이터 없으면 숨김 (TypingIndicator가 대신)
+  if (message.loading && !text.trim() && !hasDebug && !isErrorContent) return null
+
+  // 빈 상태 판단
+  const isEmpty = !message.loading && (!text.trim() || isErrorContent)
+
+  // 빈 상태 메시지 결정
+  const emptyMessage = isErrorContent
+    ? '서버 오류로 답변을 가져오지 못했습니다. 다시 시도해주세요.'
+    : hasDebug
+      ? '답변을 생성하지 못했습니다. 아래 법망 호출 내역을 확인하세요.'
+      : '답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
 
   return (
     <div className="flex gap-3">
@@ -114,14 +121,11 @@ export function MessageBubble({ message }: { message: Message }) {
         법
       </div>
       <div className="flex-1 max-w-[85%]">
-        {/* 답변 또는 실패 메시지 */}
-        {(text.trim() || showEmpty) && (
+        {(text.trim() || isEmpty) && (
           <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
             style={{ background: '#F7FAF4', border: '1px solid #D4E8C8' }}>
-            {showEmpty ? (
-              <p className="text-xs" style={{ color: '#A8A49C' }}>
-                답변을 받지 못했습니다. 아래 법망 호출 내역을 확인하세요.
-              </p>
+            {isEmpty ? (
+              <p className="text-xs" style={{ color: '#A8A49C' }}>{emptyMessage}</p>
             ) : (
               <div className="prose-legal">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -132,7 +136,6 @@ export function MessageBubble({ message }: { message: Message }) {
           </div>
         )}
 
-        {/* 디버그 토글 + 출처 */}
         {(hasDebug || (source && text.trim())) && (
           <div className="mt-1.5 flex items-center justify-between gap-2">
             {hasDebug && (
