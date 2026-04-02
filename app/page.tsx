@@ -8,50 +8,38 @@ import type { Message, DebugCall } from '@/components/MessageBubble'
 
 const CLIENT_TIMEOUT_MS = 75_000
 
-// 수집된 debug 데이터로 폴백 답변 생성 — 모든 호출 유형 활용
 function buildFallbackAnswer(debugCalls: DebugCall[]): string {
   const sections: string[] = []
-
   for (const call of debugCalls) {
     try {
       const data = JSON.parse(call.result)
-
       if (call.command === 'law.get' && data.articles?.length) {
-        const lawName = data.law_name ?? ''
         const articleLines = data.articles
           .filter((a: { full_text?: string }) => a.full_text?.trim())
           .map((a: { full_text: string }) => {
             const text = a.full_text.trim()
-            const titleEnd = text.indexOf(')')
-            return titleEnd > 0
-              ? `**${text.slice(0, titleEnd + 1)}**${text.slice(titleEnd + 1)}`
-              : text
+            const end = text.indexOf(')')
+            return end > 0 ? `**${text.slice(0, end + 1)}**${text.slice(end + 1)}` : text
           })
-        if (articleLines.length > 0) {
-          sections.push(`### 「${lawName}」\n\n${articleLines.join('\n\n')}`)
-        }
-
+        if (articleLines.length > 0)
+          sections.push(`### 「${data.law_name ?? ''}」\n\n${articleLines.join('\n\n')}`)
       } else if (call.command === 'tools.overview' && data.law_name) {
         const snippets = (data.top_articles ?? [])
           .map((a: { snippet: string }) => {
-            // snippet에 이미 조문 번호 포함 — 첫 괄호 닫기까지 볼드 처리
             const s = a.snippet.trim()
             const end = s.indexOf(')')
             return end > 0 ? `**${s.slice(0, end + 1)}**${s.slice(end + 1)}` : s
-          })
-          .join('\n\n')
+          }).join('\n\n')
         if (snippets) sections.push(`### 「${data.law_name}」 (주요 조문)\n\n${snippets}`)
-
-      } else if (call.command === 'law.search' && data.results?.length) {
+      } else if (call.command === 'law.search' && data.results?.length && !sections.length) {
         const list = data.results
           .map((r: { law_name: string; purpose?: string }) =>
             `- 「${r.law_name}」${r.purpose ? ': ' + r.purpose : ''}`)
           .join('\n')
-        if (!sections.length) sections.push(`## 관련 법령 목록\n\n${list}`)
+        sections.push(`## 관련 법령 목록\n\n${list}`)
       }
     } catch { /* skip */ }
   }
-
   if (sections.length === 0) return ''
   return sections.join('\n\n---\n\n') + '\n\n<source>api.beopmang.org</source>'
 }
@@ -61,10 +49,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  // 현재 진행 중인 요청 ID — 이전 요청 응답이 새 메시지에 쓰이지 않도록
-  const activeRequestId = useRef<string | null>(null)
+
   const abortRef = useRef<AbortController | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentRequestId = useRef<string | null>(null)   // 현재 진행 중인 요청 ID
+  const stoppedIds = useRef<Set<string>>(new Set())      // 중단된 요청 ID 목록
 
   const sendMessage = useCallback(async (userText: string) => {
     if (isLoading) return
@@ -73,7 +62,7 @@ export default function Home() {
 
     const requestId = Date.now().toString()
     const asstMsgId = requestId + '_asst'
-    activeRequestId.current = requestId
+    currentRequestId.current = requestId
 
     setMessages(prev => [
       ...prev,
@@ -89,8 +78,12 @@ export default function Home() {
     const collectedDebug: DebugCall[] = []
     let answerReceived = false
 
+    // 이 요청이 중단됐는지 확인
+    const isStopped = () => stoppedIds.current.has(requestId)
+
     const updateAsst = (updater: (m: Message) => Message) => {
-      // 이 요청이 여전히 활성 요청인지 확인 후 업데이트
+      // 중단된 요청의 업데이트는 무시
+      if (isStopped()) return
       setMessages(prev => prev.map(m => m.id === asstMsgId ? updater(m) : m))
     }
 
@@ -136,17 +129,24 @@ export default function Home() {
             updateAsst(m => ({ ...m, content: data.text, loading: false }))
           } else if (event === 'error') {
             console.error('[chat SSE error]', data)
-            setError(data.message || '서버 오류가 발생했습니다.')
+            if (!isStopped()) setError(data.message || '서버 오류가 발생했습니다.')
           }
         }
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        setError(err instanceof Error ? err.message : '알 수 없는 오류')
+        console.error('[chat fetch error]', err)
+        if (!isStopped()) setError(err instanceof Error ? err.message : '알 수 없는 오류')
       }
     }
 
-    // answer 못 받았고 debug 데이터 있으면 → finalize 시도 (50초 타임아웃)
+    // 중단된 요청이면 여기서 종료 — finalize/fallback 없이
+    if (isStopped()) {
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
+      return
+    }
+
+    // answer 없고 debug 있으면 → finalize 시도
     if (!answerReceived && collectedDebug.length > 0) {
       try {
         const finalizeController = new AbortController()
@@ -158,27 +158,25 @@ export default function Home() {
           signal: finalizeController.signal,
         })
         clearTimeout(finalizeTimeout)
-        if (finalRes.ok) {
+        if (!isStopped() && finalRes.ok) {
           const finalData = await finalRes.json()
           if (finalData.answer) {
             answerReceived = true
             updateAsst(m => ({ ...m, content: finalData.answer, loading: false }))
           }
         }
-      } catch { /* finalize 실패 시 폴백으로 */ }
-    }
+      } catch { /* fallback으로 */ }
 
-    // finalize도 실패했으면 수집 데이터 직접 포맷해서 표시
-    if (!answerReceived && collectedDebug.length > 0) {
-      const fallback = buildFallbackAnswer(collectedDebug)
-      if (fallback) {
-        updateAsst(m => ({ ...m, content: fallback, loading: false }))
-        answerReceived = true
+      if (!answerReceived && !isStopped()) {
+        const fallback = buildFallbackAnswer(collectedDebug)
+        if (fallback) {
+          updateAsst(m => ({ ...m, content: fallback, loading: false }))
+          answerReceived = true
+        }
       }
     }
 
-    // debug도 없고 answer도 없으면 → 버블에 에러 메시지 표시
-    if (!answerReceived && collectedDebug.length === 0) {
+    if (!answerReceived && !isStopped()) {
       updateAsst(m => ({ ...m, content: '__error__', loading: false }))
     } else {
       updateAsst(m => ({ ...m, loading: false }))
@@ -190,6 +188,11 @@ export default function Home() {
   }, [isLoading])
 
   const handleStop = () => {
+    // 현재 진행 중인 요청 ID를 중단 목록에 등록
+    if (currentRequestId.current) {
+      stoppedIds.current.add(currentRequestId.current)
+      currentRequestId.current = null
+    }
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
     abortRef.current?.abort()
     setIsLoading(false)
@@ -198,6 +201,7 @@ export default function Home() {
 
   const handleNewChat = () => {
     handleStop()
+    stoppedIds.current.clear()
     setMessages([])
     setError(null)
     setSidebarOpen(false)

@@ -117,7 +117,9 @@ export async function POST(req: NextRequest) {
                 const call = { command: input.command, params: input.params ?? {}, result }
                 debugCalls.push(call)
                 send(controller, 'debug', call)
-                return { type: 'tool_result' as const, tool_use_id: toolUse.id, content: result }
+                // 토큰 절약: 컨텍스트에 넣을 결과는 1500자로 제한
+                const truncatedResult = result.length > 1500 ? result.slice(0, 1500) + '...(생략)' : result
+                return { type: 'tool_result' as const, tool_use_id: toolUse.id, content: truncatedResult }
               })
             )
             messages.push({ role: 'assistant', content: response.content })
