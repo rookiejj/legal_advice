@@ -13,54 +13,51 @@ export async function POST(req: NextRequest) {
     try {
         const { question, debugCalls }: { question: string; debugCalls: DebugCall[] } = await req.json()
 
-        // law.get 결과에서 조문 전문 추출
-        const lawSections: string[] = []
-        for (const call of debugCalls) {
-            if (call.command !== 'law.get') continue
-            try {
-                const data = JSON.parse(call.result)
-                if (!data.articles?.length) continue
-                const lawName = data.law_name ?? ''
-                const articles = data.articles
-                    .filter((a: { full_text?: string }) => a.full_text?.trim())
-                    .map((a: { full_text: string }) => a.full_text.trim())
-                    .join('\n')
-                if (articles) lawSections.push(`### 「${lawName}」\n${articles}`)
-            } catch { /* skip */ }
-        }
+        // 모든 호출 결과에서 법령 데이터 추출 (law.get, tools.overview, law.search 모두)
+        const sections: string[] = []
 
-        // law.search 결과도 포함
-        const searchSections: string[] = []
         for (const call of debugCalls) {
-            if (call.command !== 'law.search') continue
             try {
                 const data = JSON.parse(call.result)
-                if (data.results?.length) {
-                    searchSections.push(
-                        data.results.map((r: { law_name: string; purpose?: string }) =>
-                            `- 「${r.law_name}」${r.purpose ? ': ' + r.purpose : ''}`
-                        ).join('\n')
-                    )
+
+                if (call.command === 'law.get' && data.articles?.length) {
+                    const lawName = data.law_name ?? ''
+                    const articles = data.articles
+                        .filter((a: { full_text?: string }) => a.full_text?.trim())
+                        .map((a: { full_text: string }) => a.full_text.trim())
+                        .join('\n')
+                    if (articles) sections.push(`### 「${lawName}」\n${articles}`)
+
+                } else if (call.command === 'tools.overview' && data.law_name) {
+                    const snippets = (data.top_articles ?? [])
+                        .map((a: { label: string; snippet: string }) => `${a.label} ${a.snippet}`)
+                        .join('\n')
+                    if (snippets) sections.push(`### 「${data.law_name}」 (주요 조문)\n${snippets}`)
+
+                } else if (call.command === 'law.search' && data.results?.length) {
+                    const list = data.results
+                        .map((r: { law_name: string; purpose?: string }) =>
+                            `- 「${r.law_name}」${r.purpose ? ': ' + r.purpose : ''}`)
+                        .join('\n')
+                    sections.push(`## 검색된 법령\n${list}`)
                 }
             } catch { /* skip */ }
         }
 
-        const collectedData = [
-            searchSections.length ? `## 검색된 법령 목록\n${searchSections.join('\n')}` : '',
-            lawSections.length ? `## 수집된 조문 원문\n${lawSections.join('\n\n')}` : '',
-        ].filter(Boolean).join('\n\n')
-
-        if (!collectedData) {
+        if (sections.length === 0) {
             return NextResponse.json({ error: '수집된 법령 데이터 없음' }, { status: 400 })
         }
 
+        // 토큰 절약을 위해 4000자로 제한
+        const collectedData = sections.join('\n\n').slice(0, 4000)
+
         const response = await anthropic.messages.create({
             model: MODEL,
-            max_tokens: 4096,
+            max_tokens: 2048,
             system: FINALIZE_SKILL,
             messages: [{
                 role: 'user',
-                content: `사용자 질문: ${question}\n\n--- api.beopmang.org 수집 데이터 ---\n${collectedData}\n\n위 조문 원문을 최대한 많이 인용하여 답변하세요.`,
+                content: `사용자 질문: ${question}\n\n--- api.beopmang.org 수집 데이터 ---\n${collectedData}\n\n위 조문을 최대한 인용하여 답변하세요.`,
             }],
         })
 

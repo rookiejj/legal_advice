@@ -8,32 +8,41 @@ import type { Message, DebugCall } from '@/components/MessageBubble'
 
 const CLIENT_TIMEOUT_MS = 75_000
 
-// 수집된 debug 데이터로 간단한 폴백 답변 생성
+// 수집된 debug 데이터로 폴백 답변 생성 — 모든 호출 유형 활용
 function buildFallbackAnswer(debugCalls: DebugCall[]): string {
   const sections: string[] = []
 
   for (const call of debugCalls) {
-    if (call.command !== 'law.get') continue
     try {
       const data = JSON.parse(call.result)
-      if (!data.articles?.length) continue
 
-      const lawName = data.law_name ?? ''
-      const articleLines = data.articles
-        .filter((a: { full_text?: string }) => a.full_text?.trim())
-        .map((a: { full_text: string }) => {
-          // full_text 에 이미 조문번호 포함 — 그대로 사용
-          const text = a.full_text.trim()
-          // 첫 번째 닫는 괄호까지가 제목, 나머지가 내용
-          const titleEnd = text.indexOf(')')
-          if (titleEnd > 0) {
-            return `**${text.slice(0, titleEnd + 1)}**${text.slice(titleEnd + 1)}`
-          }
-          return text
-        })
+      if (call.command === 'law.get' && data.articles?.length) {
+        const lawName = data.law_name ?? ''
+        const articleLines = data.articles
+          .filter((a: { full_text?: string }) => a.full_text?.trim())
+          .map((a: { full_text: string }) => {
+            const text = a.full_text.trim()
+            const titleEnd = text.indexOf(')')
+            return titleEnd > 0
+              ? `**${text.slice(0, titleEnd + 1)}**${text.slice(titleEnd + 1)}`
+              : text
+          })
+        if (articleLines.length > 0) {
+          sections.push(`### 「${lawName}」\n\n${articleLines.join('\n\n')}`)
+        }
 
-      if (articleLines.length > 0) {
-        sections.push(`### 「${lawName}」\n\n${articleLines.join('\n\n')}`)
+      } else if (call.command === 'tools.overview' && data.law_name) {
+        const snippets = (data.top_articles ?? [])
+          .map((a: { label: string; snippet: string }) => `**${a.label}** ${a.snippet}`)
+          .join('\n')
+        if (snippets) sections.push(`### 「${data.law_name}」 (주요 조문)\n\n${snippets}`)
+
+      } else if (call.command === 'law.search' && data.results?.length) {
+        const list = data.results
+          .map((r: { law_name: string; purpose?: string }) =>
+            `- 「${r.law_name}」${r.purpose ? ': ' + r.purpose : ''}`)
+          .join('\n')
+        if (!sections.length) sections.push(`## 관련 법령 목록\n\n${list}`)
       }
     } catch { /* skip */ }
   }
@@ -131,18 +140,24 @@ export default function Home() {
       }
     }
 
-    // answer 못 받았고 debug 데이터 있으면 → finalize 시도
+    // answer 못 받았고 debug 데이터 있으면 → finalize 시도 (50초 타임아웃)
     if (!answerReceived && collectedDebug.length > 0) {
       try {
+        const finalizeController = new AbortController()
+        const finalizeTimeout = setTimeout(() => finalizeController.abort(), 50_000)
         const finalRes = await fetch('/api/finalize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question: userText, debugCalls: collectedDebug }),
+          signal: finalizeController.signal,
         })
-        const finalData = await finalRes.json()
-        if (finalData.answer) {
-          answerReceived = true
-          updateAsst(m => ({ ...m, content: finalData.answer, loading: false }))
+        clearTimeout(finalizeTimeout)
+        if (finalRes.ok) {
+          const finalData = await finalRes.json()
+          if (finalData.answer) {
+            answerReceived = true
+            updateAsst(m => ({ ...m, content: finalData.answer, loading: false }))
+          }
         }
       } catch { /* finalize 실패 시 폴백으로 */ }
     }
@@ -179,7 +194,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#F4F1EB' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#ECF3E8' }}>
       {sidebarOpen && (
         <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -187,7 +202,7 @@ export default function Home() {
 
       <main className="flex flex-col flex-1 min-w-0">
         <header className="flex items-center px-4 py-3 flex-shrink-0 gap-3"
-          style={{ borderBottom: '1px solid #E2DDD5', background: '#F4F1EB' }}>
+          style={{ borderBottom: '1px solid #E2DDD5', background: '#ECF3E8' }}>
           <button className="md:hidden flex flex-col gap-1 p-1" onClick={() => setSidebarOpen(true)} aria-label="메뉴">
             {[0, 1, 2].map((i) => <span key={i} className="block w-5 h-0.5 rounded" style={{ background: '#1A1A1A' }} />)}
           </button>
