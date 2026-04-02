@@ -176,8 +176,12 @@ export default function Home() {
       }
     }
 
-    // 최종 loading 해제
-    updateAsst(m => ({ ...m, loading: false }))
+    // debug도 없고 answer도 없으면 → 버블에 에러 메시지 표시
+    if (!answerReceived && collectedDebug.length === 0) {
+      updateAsst(m => ({ ...m, content: '__error__', loading: false }))
+    } else {
+      updateAsst(m => ({ ...m, loading: false }))
+    }
 
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
     setIsLoading(false)
