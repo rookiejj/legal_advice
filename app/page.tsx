@@ -49,6 +49,12 @@ export default function Home() {
         signal: controller.signal,
       })
 
+      // 500 등 에러 응답 처리
+      if (!res.ok) {
+        const errText = await res.text()
+        try { const e = JSON.parse(errText); throw new Error(e.error || '서버 오류') }
+        catch { throw new Error(`서버 오류 (${res.status})`) }
+      }
       if (!res.body) throw new Error('스트림 없음')
 
       const reader = res.body.getReader()
