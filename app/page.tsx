@@ -49,6 +49,8 @@ export default function Home() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let answerReceived = false
+      const collectedDebug: DebugCall[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -67,20 +69,35 @@ export default function Home() {
           const data = JSON.parse(dataMatch[1])
 
           if (event === 'debug') {
-            // 디버그 호출 즉시 패널에 추가
+            collectedDebug.push(data as DebugCall)
             setMessages(prev => prev.map(m =>
               m.id === asstMsgId
                 ? { ...m, debug: [...(m.debug ?? []), data as DebugCall] }
                 : m
             ))
           } else if (event === 'answer') {
+            answerReceived = true
             setMessages(prev => prev.map(m =>
               m.id === asstMsgId ? { ...m, content: data.text } : m
             ))
           } else if (event === 'error') {
             setError(data.message)
-            // 에러가 나도 디버그 패널은 유지 (content만 비워둠)
           }
+        }
+      }
+
+      // 스트림은 끝났는데 answer가 없고 debug 데이터는 있으면 → finalize 자동 호출
+      if (!answerReceived && collectedDebug.length > 0) {
+        const finalRes = await fetch('/api/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: userText, debugCalls: collectedDebug }),
+        })
+        const finalData = await finalRes.json()
+        if (finalData.answer) {
+          setMessages(prev => prev.map(m =>
+            m.id === asstMsgId ? { ...m, content: finalData.answer } : m
+          ))
         }
       }
     } catch (err) {
