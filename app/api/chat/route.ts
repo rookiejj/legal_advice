@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic'
-import { LEGAL_CONSULTANT_SKILL, transformToLegalQuery } from '@/skills/legal-consultant'
+import { LEGAL_CONSULTANT_SKILL } from '@/skills/legal-consultant'
+import { fetchLegalContext } from '@/lib/beopmang'
 
 export const maxDuration = 60
 
@@ -12,25 +13,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
     }
 
-    const response = await (anthropic.messages.create as Function)({
+    // api.beopmang.org 에서 직접 법령 데이터 fetch
+    const legalContext = await fetchLegalContext(message)
+
+    const userContent = legalContext
+      ? `사용자 질문: ${message}\n\n--- api.beopmang.org 법령 데이터 ---\n${legalContext}`
+      : message
+
+    const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 2048,
       system: LEGAL_CONSULTANT_SKILL,
-      mcp_servers: [
-        {
-          type: 'url',
-          url: 'https://api.beopmang.org/mcp',
-          name: 'beopmang',
-        },
-      ],
-      messages: [
-        { role: 'user', content: transformToLegalQuery(message) },
-      ],
+      messages: [{ role: 'user', content: userContent }],
     })
 
     const answer = response.content
-      .filter((block: { type: string }) => block.type === 'text')
-      .map((block: { type: string; text: string }) => block.text)
+      .filter((block) => block.type === 'text')
+      .map((block) => (block as { type: 'text'; text: string }).text)
       .join('')
 
     if (!answer) {
