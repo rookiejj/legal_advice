@@ -24,9 +24,11 @@ export default function Home() {
     const userMsgId = Date.now().toString()
     const asstMsgId = (Date.now() + 1).toString()
 
-    setMessages(prev => [...prev, { id: userMsgId, role: 'user', content: userText }])
-    // 빈 assistant 메시지 미리 추가 — 디버그 데이터를 실시간으로 채워넣음
-    setMessages(prev => [...prev, { id: asstMsgId, role: 'assistant', content: '', debug: [], loading: true }])
+    setMessages(prev => [
+      ...prev,
+      { id: userMsgId, role: 'user', content: userText },
+      { id: asstMsgId, role: 'assistant', content: '', debug: [], loading: true },
+    ])
     setIsLoading(true)
 
     const controller = new AbortController()
@@ -35,6 +37,9 @@ export default function Home() {
     timeoutRef.current = setTimeout(() => {
       controller.abort()
     }, CLIENT_TIMEOUT_MS)
+
+    const collectedDebug: DebugCall[] = []
+    let answerReceived = false
 
     try {
       const res = await fetch('/api/chat', {
@@ -49,8 +54,6 @@ export default function Home() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      let answerReceived = false
-      const collectedDebug: DebugCall[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -78,16 +81,23 @@ export default function Home() {
           } else if (event === 'answer') {
             answerReceived = true
             setMessages(prev => prev.map(m =>
-              m.id === asstMsgId ? { ...m, content: data.text } : m
+              m.id === asstMsgId ? { ...m, content: data.text, loading: false } : m
             ))
           } else if (event === 'error') {
             setError(data.message)
           }
         }
       }
+    } catch (err) {
+      // AbortError(타임아웃/중단)는 조용히 처리 — 디버그 패널 유지
+      if ((err as Error).name !== 'AbortError') {
+        setError(err instanceof Error ? err.message : '알 수 없는 오류')
+      }
+    }
 
-      // 스트림은 끝났는데 answer가 없고 debug 데이터는 있으면 → finalize 자동 호출
-      if (!answerReceived && collectedDebug.length > 0) {
+    // 스트림 끝났는데 answer 없고 debug 데이터 있으면 → finalize 자동 호출
+    if (!answerReceived && collectedDebug.length > 0) {
+      try {
         const finalRes = await fetch('/api/finalize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -96,35 +106,45 @@ export default function Home() {
         const finalData = await finalRes.json()
         if (finalData.answer) {
           setMessages(prev => prev.map(m =>
-            m.id === asstMsgId ? { ...m, content: finalData.answer } : m
+            m.id === asstMsgId ? { ...m, content: finalData.answer, loading: false } : m
           ))
+          answerReceived = true
         }
+      } catch {
+        // finalize 실패해도 디버그 패널은 유지
       }
-    } catch (err) {
-      const isAbort = (err as Error).name === 'AbortError'
-      if (!isAbort) {
-        setError(err instanceof Error ? err.message : '알 수 없는 오류')
-      }
-      // AbortError(타임아웃)는 에러 메시지 없이 조용히 종료 — 디버그 패널은 남아있음
-    } finally {
-      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
-      setIsLoading(false)
-      abortRef.current = null
-      // 로딩 끝 — 빈 상태면 실패 메시지 표시
-      setMessages(prev => prev.map(m => m.id === asstMsgId ? { ...m, loading: false } : m))
     }
+
+    // 최종 loading 해제
+    setMessages(prev => prev.map(m =>
+      m.id === asstMsgId ? { ...m, loading: false } : m
+    ))
+
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
+    setIsLoading(false)
+    abortRef.current = null
+
   }, [isLoading])
 
   const handleStop = () => {
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
     abortRef.current?.abort()
     setIsLoading(false)
+    setMessages(prev => prev.map(m => m.loading ? { ...m, loading: false } : m))
   }
-  const handleNewChat = () => { handleStop(); setMessages([]); setError(null); setSidebarOpen(false) }
+
+  const handleNewChat = () => {
+    handleStop()
+    setMessages([])
+    setError(null)
+    setSidebarOpen(false)
+  }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F4F1EB' }}>
-      {sidebarOpen && <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
       <Sidebar isOpen={sidebarOpen} onNewChat={handleNewChat} onCategoryClick={sendMessage} onClose={() => setSidebarOpen(false)} />
 
       <main className="flex flex-col flex-1 min-w-0">
