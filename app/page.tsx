@@ -6,7 +6,7 @@ import { InputBar } from '@/components/InputBar'
 import { Sidebar } from '@/components/Sidebar'
 import type { Message, DebugCall } from '@/components/MessageBubble'
 
-const CLIENT_TIMEOUT_MS = 60_000
+const CLIENT_TIMEOUT_MS = 75_000
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])

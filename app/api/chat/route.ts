@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: message }]
     const debugCalls: DebugCall[] = []
 
-    const MAX_ROUNDS = 8
-    const TIME_LIMIT_MS = 50_000
+    const MAX_ROUNDS = 5
+    const TIME_LIMIT_MS = 40_000
     const startTime = Date.now()
     let finalAnswer = ''
 
