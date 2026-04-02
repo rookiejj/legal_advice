@@ -135,7 +135,8 @@ export default function Home() {
             answerReceived = true
             updateAsst(m => ({ ...m, content: data.text, loading: false }))
           } else if (event === 'error') {
-            setError(data.message)
+            console.error('[chat SSE error]', data)
+            setError(data.message || '서버 오류가 발생했습니다.')
           }
         }
       }
