@@ -26,7 +26,7 @@ export default function Home() {
 
     setMessages(prev => [...prev, { id: userMsgId, role: 'user', content: userText }])
     // 빈 assistant 메시지 미리 추가 — 디버그 데이터를 실시간으로 채워넣음
-    setMessages(prev => [...prev, { id: asstMsgId, role: 'assistant', content: '', debug: [] }])
+    setMessages(prev => [...prev, { id: asstMsgId, role: 'assistant', content: '', debug: [], loading: true }])
     setIsLoading(true)
 
     const controller = new AbortController()
@@ -93,6 +93,8 @@ export default function Home() {
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
       setIsLoading(false)
       abortRef.current = null
+      // 로딩 끝 — 빈 상태면 실패 메시지 표시
+      setMessages(prev => prev.map(m => m.id === asstMsgId ? { ...m, loading: false } : m))
     }
   }, [isLoading])
 

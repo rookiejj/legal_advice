@@ -11,6 +11,7 @@ export type Message = {
   role: 'user' | 'assistant'
   content: string
   debug?: DebugCall[]
+  loading?: boolean  // 아직 응답 수신 중
 }
 
 function parseSource(content: string): { text: string; source: string | null } {
@@ -33,7 +34,6 @@ function formatResult(raw: string): string {
 
 function DebugPanel({ calls }: { calls: DebugCall[] }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
-
   return (
     <div className="mt-2 rounded-xl overflow-hidden text-xs"
       style={{ border: '1px solid #C6E89A', background: '#F7FCF0' }}>
@@ -56,11 +56,9 @@ function DebugPanel({ calls }: { calls: DebugCall[] }) {
         }
         return (
           <div key={i} style={{ borderBottom: i < calls.length - 1 ? '1px solid #DCF0C0' : 'none' }}>
-            <button
-              onClick={() => setOpenIndex(isOpen ? null : i)}
+            <button onClick={() => setOpenIndex(isOpen ? null : i)}
               className="w-full text-left px-3 py-2 flex items-center gap-2 font-mono transition-all"
-              style={{ background: isOpen ? '#E4F5CC' : 'transparent' }}
-            >
+              style={{ background: isOpen ? '#E4F5CC' : 'transparent' }}>
               <span style={{ color: '#3A7D1E', fontWeight: 700, minWidth: 20 }}>#{i + 1}</span>
               <span style={{ color: '#1A3A1E', fontWeight: 600 }}>{call.command}</span>
               <span style={{ color: '#6B9A3E', flex: 1 }}>{JSON.stringify(call.params)}</span>
@@ -102,7 +100,11 @@ export function MessageBubble({ message }: { message: Message }) {
   const { text, source } = parseSource(message.content)
   const isPrimary = source === 'api.beopmang.org'
   const hasDebug = message.debug && message.debug.length > 0
-  const isEmpty = !text.trim()
+
+  // 로딩 중이거나 content가 있으면 정상 — 로딩 끝난 후에도 비어있으면 실패
+  const showEmpty = !message.loading && !text.trim()
+  // 로딩 중이고 아직 아무것도 없으면 bubble 자체를 숨김 (TypingIndicator가 대신함)
+  if (message.loading && !text.trim() && !hasDebug) return null
 
   return (
     <div className="flex gap-3">
@@ -111,47 +113,50 @@ export function MessageBubble({ message }: { message: Message }) {
         법
       </div>
       <div className="flex-1 max-w-[85%]">
-        {/* 답변 박스 — 타임아웃으로 content 없어도 표시 */}
-        <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
-          style={{ background: '#fff', border: '1px solid #E2DDD5' }}>
-          {isEmpty ? (
-            <p className="text-xs" style={{ color: '#A8A49C' }}>
-              답변을 받지 못했습니다. 아래 법망 호출 내역을 확인하세요.
-            </p>
-          ) : (
-            <div className="prose-legal">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {highlightArticles(text)}
-              </ReactMarkdown>
-            </div>
-          )}
-        </div>
+        {/* 답변 또는 실패 메시지 */}
+        {(text.trim() || showEmpty) && (
+          <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
+            style={{ background: '#fff', border: '1px solid #E2DDD5' }}>
+            {showEmpty ? (
+              <p className="text-xs" style={{ color: '#A8A49C' }}>
+                답변을 받지 못했습니다. 아래 법망 호출 내역을 확인하세요.
+              </p>
+            ) : (
+              <div className="prose-legal">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {highlightArticles(text)}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        )}
 
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          {hasDebug && (
-            <button
-              onClick={() => setDebugOpen(v => !v)}
-              className="text-xs px-2 py-0.5 rounded-full transition-all"
-              style={{
-                background: debugOpen ? '#1A3A1E' : '#F0FAE0',
-                color: debugOpen ? '#A8E063' : '#3A7D1E',
-                border: '1px solid #C6E89A',
-              }}
-            >
-              {debugOpen ? '▲ 닫기' : '▼ 법망 호출 내역'} ({message.debug!.length}회)
-            </button>
-          )}
-          {source && !isEmpty && (
-            <span className="text-xs px-2 py-0.5 rounded-full ml-auto"
-              style={{
-                background: isPrimary ? '#F0FAE0' : '#F3F4F6',
-                color: isPrimary ? '#3A7D1E' : '#9CA3AF',
-                border: `1px solid ${isPrimary ? '#C6E89A' : '#E5E7EB'}`,
-              }}>
-              출처: {source}
-            </span>
-          )}
-        </div>
+        {/* 디버그 토글 + 출처 */}
+        {(hasDebug || (source && text.trim())) && (
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            {hasDebug && (
+              <button onClick={() => setDebugOpen(v => !v)}
+                className="text-xs px-2 py-0.5 rounded-full transition-all"
+                style={{
+                  background: debugOpen ? '#1A3A1E' : '#F0FAE0',
+                  color: debugOpen ? '#A8E063' : '#3A7D1E',
+                  border: '1px solid #C6E89A',
+                }}>
+                {debugOpen ? '▲ 닫기' : '▼ 법망 호출 내역'} ({message.debug!.length}회)
+              </button>
+            )}
+            {source && text.trim() && (
+              <span className="text-xs px-2 py-0.5 rounded-full ml-auto"
+                style={{
+                  background: isPrimary ? '#F0FAE0' : '#F3F4F6',
+                  color: isPrimary ? '#3A7D1E' : '#9CA3AF',
+                  border: `1px solid ${isPrimary ? '#C6E89A' : '#E5E7EB'}`,
+                }}>
+                출처: {source}
+              </span>
+            )}
+          </div>
+        )}
 
         {debugOpen && hasDebug && <DebugPanel calls={message.debug!} />}
       </div>
