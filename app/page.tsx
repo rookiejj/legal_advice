@@ -8,11 +8,34 @@ import type { Message, DebugCall } from '@/components/MessageBubble'
 
 const CLIENT_TIMEOUT_MS = 75_000
 
+// 수집된 debug 데이터로 간단한 폴백 답변 생성
+function buildFallbackAnswer(debugCalls: DebugCall[]): string {
+  const lines: string[] = ['수집된 법령 데이터를 기반으로 정리합니다.\n']
+  for (const call of debugCalls) {
+    if (call.command !== 'law.get' && call.command !== 'tools.overview') continue
+    try {
+      const data = JSON.parse(call.result)
+      if (data.law_name) lines.push(`### 「${data.law_name}」`)
+      if (data.articles?.length) {
+        for (const a of data.articles) {
+          if (a.full_text) lines.push(`**${a.label}** ${a.full_text}`)
+        }
+        lines.push('')
+      }
+    } catch { /* skip */ }
+  }
+  if (lines.length <= 1) return ''
+  lines.push('\n<source>api.beopmang.org</source>')
+  return lines.join('\n')
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // 현재 진행 중인 요청 ID — 이전 요청 응답이 새 메시지에 쓰이지 않도록
+  const activeRequestId = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -21,25 +44,28 @@ export default function Home() {
     setError(null)
     setSidebarOpen(false)
 
-    const userMsgId = Date.now().toString()
-    const asstMsgId = (Date.now() + 1).toString()
+    const requestId = Date.now().toString()
+    const asstMsgId = requestId + '_asst'
+    activeRequestId.current = requestId
 
     setMessages(prev => [
       ...prev,
-      { id: userMsgId, role: 'user', content: userText },
+      { id: requestId, role: 'user', content: userText },
       { id: asstMsgId, role: 'assistant', content: '', debug: [], loading: true },
     ])
     setIsLoading(true)
 
     const controller = new AbortController()
     abortRef.current = controller
-
-    timeoutRef.current = setTimeout(() => {
-      controller.abort()
-    }, CLIENT_TIMEOUT_MS)
+    timeoutRef.current = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS)
 
     const collectedDebug: DebugCall[] = []
     let answerReceived = false
+
+    const updateAsst = (updater: (m: Message) => Message) => {
+      // 이 요청이 여전히 활성 요청인지 확인 후 업데이트
+      setMessages(prev => prev.map(m => m.id === asstMsgId ? updater(m) : m))
+    }
 
     try {
       const res = await fetch('/api/chat', {
@@ -49,12 +75,12 @@ export default function Home() {
         signal: controller.signal,
       })
 
-      // 500 등 에러 응답 처리
       if (!res.ok) {
         const errText = await res.text()
-        try { const e = JSON.parse(errText); throw new Error(e.error || '서버 오류') }
+        try { throw new Error(JSON.parse(errText).error || '서버 오류') }
         catch { throw new Error(`서버 오류 (${res.status})`) }
       }
+
       if (!res.body) throw new Error('스트림 없음')
 
       const reader = res.body.getReader()
@@ -64,7 +90,6 @@ export default function Home() {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         buffer += decoder.decode(value, { stream: true })
         const parts = buffer.split('\n\n')
         buffer = parts.pop() ?? ''
@@ -73,35 +98,27 @@ export default function Home() {
           const eventMatch = part.match(/^event: (\w+)/)
           const dataMatch = part.match(/^data: (.+)$/m)
           if (!eventMatch || !dataMatch) continue
-
           const event = eventMatch[1]
           const data = JSON.parse(dataMatch[1])
 
           if (event === 'debug') {
             collectedDebug.push(data as DebugCall)
-            setMessages(prev => prev.map(m =>
-              m.id === asstMsgId
-                ? { ...m, debug: [...(m.debug ?? []), data as DebugCall] }
-                : m
-            ))
+            updateAsst(m => ({ ...m, debug: [...(m.debug ?? []), data as DebugCall] }))
           } else if (event === 'answer') {
             answerReceived = true
-            setMessages(prev => prev.map(m =>
-              m.id === asstMsgId ? { ...m, content: data.text, loading: false } : m
-            ))
+            updateAsst(m => ({ ...m, content: data.text, loading: false }))
           } else if (event === 'error') {
             setError(data.message)
           }
         }
       }
     } catch (err) {
-      // AbortError(타임아웃/중단)는 조용히 처리 — 디버그 패널 유지
       if ((err as Error).name !== 'AbortError') {
         setError(err instanceof Error ? err.message : '알 수 없는 오류')
       }
     }
 
-    // 스트림 끝났는데 answer 없고 debug 데이터 있으면 → finalize 자동 호출
+    // answer 못 받았고 debug 데이터 있으면 → finalize 시도
     if (!answerReceived && collectedDebug.length > 0) {
       try {
         const finalRes = await fetch('/api/finalize', {
@@ -111,25 +128,27 @@ export default function Home() {
         })
         const finalData = await finalRes.json()
         if (finalData.answer) {
-          setMessages(prev => prev.map(m =>
-            m.id === asstMsgId ? { ...m, content: finalData.answer, loading: false } : m
-          ))
           answerReceived = true
+          updateAsst(m => ({ ...m, content: finalData.answer, loading: false }))
         }
-      } catch {
-        // finalize 실패해도 디버그 패널은 유지
+      } catch { /* finalize 실패 시 폴백으로 */ }
+    }
+
+    // finalize도 실패했으면 수집 데이터 직접 포맷해서 표시
+    if (!answerReceived && collectedDebug.length > 0) {
+      const fallback = buildFallbackAnswer(collectedDebug)
+      if (fallback) {
+        updateAsst(m => ({ ...m, content: fallback, loading: false }))
+        answerReceived = true
       }
     }
 
     // 최종 loading 해제
-    setMessages(prev => prev.map(m =>
-      m.id === asstMsgId ? { ...m, loading: false } : m
-    ))
+    updateAsst(m => ({ ...m, loading: false }))
 
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
     setIsLoading(false)
     abortRef.current = null
-
   }, [isLoading])
 
   const handleStop = () => {
