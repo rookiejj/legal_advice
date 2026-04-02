@@ -8,6 +8,4 @@ export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-// web_search 툴을 지원하는 모델
-// claude-sonnet-4-5-20250514 로 변경 시 더 빠르고 비용 절감
-export const MODEL = 'claude-opus-4-5-20250514'
+export const MODEL = 'claude-sonnet-4-5-20250514'

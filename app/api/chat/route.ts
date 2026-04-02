@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic'
 import { LEGAL_CONSULTANT_SKILL, transformToLegalQuery } from '@/skills/legal-consultant'
 
-export const maxDuration = 60 // Vercel Pro: 300, Free: 60초
+export const maxDuration = 60
 
 type HistoryItem = {
   role: 'user' | 'assistant'
@@ -27,8 +27,7 @@ export async function POST(req: NextRequest) {
       model: MODEL,
       max_tokens: 4096,
       system: LEGAL_CONSULTANT_SKILL,
-      // @ts-expect-error: web_search_20250305 는 최신 툴 타입으로 SDK 버전에 따라 타입 미인식 가능
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      tools: [{ type: 'web_search_20250305' as const, name: 'web_search' }] as never,
       messages,
     })
 
@@ -45,11 +44,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ answer })
-  } catch (err) {
-    console.error('[chat/route] error:', err)
-    return NextResponse.json(
-      { error: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' },
-      { status: 500 }
-    )
+  } catch (err: unknown) {
+    console.error('[chat] error:', JSON.stringify(err, null, 2))
+
+    const message =
+      err instanceof Error ? err.message : '서버 오류가 발생했습니다.'
+
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
