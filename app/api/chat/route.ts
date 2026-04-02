@@ -45,11 +45,11 @@ const BEOPMANG_TOOL: Anthropic.Tool = {
 async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<string> {
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 4096,
     system: LEGAL_CONSULTANT_SKILL,
     messages: [
       ...messages,
-      { role: 'user', content: '지금까지 조회한 데이터로 답변을 완성해주세요. 추가 조회 없이 지금 바로 답변하세요.' },
+      { role: 'user', content: '지금까지 조회한 법령 조문을 최대한 많이 인용하여 답변을 완성해주세요. 조문 번호와 원문을 생략하지 마세요. 추가 조회 없이 지금 바로 답변하세요.' },
     ],
   })
   return response.content
