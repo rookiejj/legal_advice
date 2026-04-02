@@ -26,7 +26,7 @@ export function ChatWindow({ messages, isLoading, onExampleClick }: Props) {
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 overflow-y-auto pt-16">
         <div className="max-w-xl w-full">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 text-2xl font-bold"
@@ -43,9 +43,9 @@ export function ChatWindow({ messages, isLoading, onExampleClick }: Props) {
             {EXAMPLES.map((ex) => (
               <button key={ex} onClick={() => onExampleClick(ex)}
                 className="text-left w-full px-4 py-3 rounded-xl text-sm transition-all"
-                style={{ background: '#fff', border: '1px solid #E2DDD5', color: '#3D3A30' }}
+                style={{ background: '#F7FAF4', border: '1px solid #D4E8C8', color: '#3D3A30' }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#A8E063'; e.currentTarget.style.color = '#1A3A1E'; e.currentTarget.style.background = '#F5FCE8' }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E2DDD5'; e.currentTarget.style.color = '#3D3A30'; e.currentTarget.style.background = '#fff' }}>
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E2DDD5'; e.currentTarget.style.color = '#3D3A30'; e.currentTarget.style.background = '#F7FAF4' }}>
                 {ex}
               </button>
             ))}
