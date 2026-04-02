@@ -37,21 +37,15 @@ function DebugPanel({ calls }: { calls: DebugCall[] }) {
   return (
     <div className="mt-2 rounded-xl overflow-hidden text-xs"
       style={{ border: '1px solid #C6E89A', background: '#F7FCF0' }}>
-
-      {/* 요약 헤더 */}
       <div className="px-3 py-2 flex items-center gap-2"
         style={{ background: '#EDF7DC', borderBottom: '1px solid #DCF0C0' }}>
         <span style={{ color: '#3A7D1E', fontWeight: 600 }}>api.beopmang.org 호출 내역</span>
         <span style={{ color: '#6B9A3E' }}>총 {calls.length}회</span>
       </div>
-
-      {/* 호출 목록 */}
       {calls.map((call, i) => {
         const isOpen = openIndex === i
         let parsedResult: unknown = null
         try { parsedResult = JSON.parse(call.result) } catch { /* raw */ }
-
-        // 결과 요약 (법령명, 조문 수 등)
         let summary = ''
         if (parsedResult && typeof parsedResult === 'object') {
           const r = parsedResult as Record<string, unknown>
@@ -60,10 +54,8 @@ function DebugPanel({ calls }: { calls: DebugCall[] }) {
           else if (Array.isArray(r.results)) summary = `→ ${(r.results as unknown[]).length}개 법령`
           else if (Array.isArray(r.articles)) summary = `→ ${(r.articles as unknown[]).length}개 조문`
         }
-
         return (
           <div key={i} style={{ borderBottom: i < calls.length - 1 ? '1px solid #DCF0C0' : 'none' }}>
-            {/* 호출 헤더 — 클릭으로 펼치기 */}
             <button
               onClick={() => setOpenIndex(isOpen ? null : i)}
               className="w-full text-left px-3 py-2 flex items-center gap-2 font-mono transition-all"
@@ -71,30 +63,18 @@ function DebugPanel({ calls }: { calls: DebugCall[] }) {
             >
               <span style={{ color: '#3A7D1E', fontWeight: 700, minWidth: 20 }}>#{i + 1}</span>
               <span style={{ color: '#1A3A1E', fontWeight: 600 }}>{call.command}</span>
-              <span style={{ color: '#6B9A3E', flex: 1 }}>
-                {JSON.stringify(call.params)}
-              </span>
-              {summary && (
-                <span style={{ color: '#3A7D1E', fontWeight: 500 }}>{summary}</span>
-              )}
+              <span style={{ color: '#6B9A3E', flex: 1 }}>{JSON.stringify(call.params)}</span>
+              {summary && <span style={{ color: '#3A7D1E', fontWeight: 500 }}>{summary}</span>}
               <span style={{ color: '#A8C87A', marginLeft: 4 }}>{isOpen ? '▲' : '▼'}</span>
             </button>
-
-            {/* 전체 결과 — 펼쳤을 때 */}
             {isOpen && (
-              <pre
-                className="px-3 py-3 overflow-x-auto whitespace-pre-wrap break-all"
+              <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap break-all"
                 style={{
-                  color: '#2D3A1E',
-                  background: '#F0F9E4',
-                  borderTop: '1px solid #DCF0C0',
-                  margin: 0,
-                  fontSize: '11px',
-                  lineHeight: 1.6,
-                  maxHeight: '400px',
-                  overflowY: 'auto',
-                }}
-              >
+                  color: '#2D3A1E', background: '#F0F9E4',
+                  borderTop: '1px solid #DCF0C0', margin: 0,
+                  fontSize: '11px', lineHeight: 1.6,
+                  maxHeight: '400px', overflowY: 'auto',
+                }}>
                 {formatResult(call.result)}
               </pre>
             )}
@@ -122,6 +102,7 @@ export function MessageBubble({ message }: { message: Message }) {
   const { text, source } = parseSource(message.content)
   const isPrimary = source === 'api.beopmang.org'
   const hasDebug = message.debug && message.debug.length > 0
+  const isEmpty = !text.trim()
 
   return (
     <div className="flex gap-3">
@@ -130,13 +111,20 @@ export function MessageBubble({ message }: { message: Message }) {
         법
       </div>
       <div className="flex-1 max-w-[85%]">
+        {/* 답변 박스 — 타임아웃으로 content 없어도 표시 */}
         <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
           style={{ background: '#fff', border: '1px solid #E2DDD5' }}>
-          <div className="prose-legal">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {highlightArticles(text)}
-            </ReactMarkdown>
-          </div>
+          {isEmpty ? (
+            <p className="text-xs" style={{ color: '#A8A49C' }}>
+              답변을 받지 못했습니다. 아래 법망 호출 내역을 확인하세요.
+            </p>
+          ) : (
+            <div className="prose-legal">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {highlightArticles(text)}
+              </ReactMarkdown>
+            </div>
+          )}
         </div>
 
         <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -153,7 +141,7 @@ export function MessageBubble({ message }: { message: Message }) {
               {debugOpen ? '▲ 닫기' : '▼ 법망 호출 내역'} ({message.debug!.length}회)
             </button>
           )}
-          {source && (
+          {source && !isEmpty && (
             <span className="text-xs px-2 py-0.5 rounded-full ml-auto"
               style={{
                 background: isPrimary ? '#F0FAE0' : '#F3F4F6',

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic'
 import { LEGAL_CONSULTANT_SKILL } from '@/skills/legal-consultant'
 import type Anthropic from '@anthropic-ai/sdk'
@@ -56,81 +56,99 @@ async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<
     .join('')
 }
 
-type DebugCall = { command: string; params: Record<string, unknown>; result: string }
-
 export async function POST(req: NextRequest) {
-  try {
-    const { message }: { message: string } = await req.json()
+  const { message }: { message: string } = await req.json()
 
-    if (!message?.trim()) {
-      return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
-    }
-
-    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: message }]
-    const debugCalls: DebugCall[] = []
-
-    const MAX_ROUNDS = 5
-    const TIME_LIMIT_MS = 40_000
-    const startTime = Date.now()
-    let finalAnswer = ''
-
-    for (let i = 0; i < MAX_ROUNDS; i++) {
-      if (Date.now() - startTime > TIME_LIMIT_MS) {
-        finalAnswer = await generateFinalAnswer(messages)
-        break
-      }
-
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 4096,
-        system: LEGAL_CONSULTANT_SKILL,
-        tools: [BEOPMANG_TOOL],
-        messages,
-      })
-
-      if (response.stop_reason === 'end_turn') {
-        finalAnswer = response.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map(b => b.text)
-          .join('')
-        break
-      }
-
-      if (response.stop_reason === 'tool_use') {
-        const toolUseBlocks = response.content.filter(
-          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-        )
-
-        const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-          toolUseBlocks.map(async (toolUse) => {
-            const input = toolUse.input as { command: string; params?: Record<string, unknown> }
-            const result = await callBeopmang(input.command, input.params ?? {})
-            // 디버그용 호출 기록
-            debugCalls.push({ command: input.command, params: input.params ?? {}, result })
-            return { type: 'tool_result' as const, tool_use_id: toolUse.id, content: result }
-          })
-        )
-
-        messages.push({ role: 'assistant', content: response.content })
-        messages.push({ role: 'user', content: toolResults })
-        continue
-      }
-
-      finalAnswer = await generateFinalAnswer(messages)
-      break
-    }
-
-    if (!finalAnswer) finalAnswer = await generateFinalAnswer(messages)
-
-    // beopmang 호출이 있었으면 출처 강제 지정
-    if (debugCalls.length > 0) {
-      finalAnswer = finalAnswer.replace(/<source>.*?<\/source>/g, "<source>api.beopmang.org<\/source>")
-    }
-
-    return NextResponse.json({ answer: finalAnswer, debug: debugCalls })
-  } catch (err: unknown) {
-    console.error('[chat] error:', JSON.stringify(err, null, 2))
-    const message = err instanceof Error ? err.message : '서버 오류가 발생했습니다.'
-    return NextResponse.json({ error: message }, { status: 500 })
+  if (!message?.trim()) {
+    return new Response(JSON.stringify({ error: '메시지를 입력해주세요.' }), { status: 400 })
   }
+
+  // SSE 스트림 — 툴 호출마다 즉시 전송, 타임아웃 나도 기존 데이터 보존
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(
+          new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        )
+      }
+
+      try {
+        const messages: Anthropic.MessageParam[] = [{ role: 'user', content: message }]
+        const debugCalls: Array<{ command: string; params: Record<string, unknown>; result: string }> = []
+        const MAX_ROUNDS = 5
+        const TIME_LIMIT_MS = 40_000
+        const startTime = Date.now()
+        let finalAnswer = ''
+
+        for (let i = 0; i < MAX_ROUNDS; i++) {
+          if (Date.now() - startTime > TIME_LIMIT_MS) {
+            finalAnswer = await generateFinalAnswer(messages)
+            break
+          }
+
+          const response = await anthropic.messages.create({
+            model: MODEL,
+            max_tokens: 4096,
+            system: LEGAL_CONSULTANT_SKILL,
+            tools: [BEOPMANG_TOOL],
+            messages,
+          })
+
+          if (response.stop_reason === 'end_turn') {
+            finalAnswer = response.content
+              .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+              .map(b => b.text)
+              .join('')
+            break
+          }
+
+          if (response.stop_reason === 'tool_use') {
+            const toolUseBlocks = response.content.filter(
+              (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+            )
+
+            const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+              toolUseBlocks.map(async (toolUse) => {
+                const input = toolUse.input as { command: string; params?: Record<string, unknown> }
+                const result = await callBeopmang(input.command, input.params ?? {})
+                const call = { command: input.command, params: input.params ?? {}, result }
+                debugCalls.push(call)
+                // 툴 호출 완료 즉시 클라이언트로 전송
+                send('debug', call)
+                return { type: 'tool_result' as const, tool_use_id: toolUse.id, content: result }
+              })
+            )
+
+            messages.push({ role: 'assistant', content: response.content })
+            messages.push({ role: 'user', content: toolResults })
+            continue
+          }
+
+          finalAnswer = await generateFinalAnswer(messages)
+          break
+        }
+
+        if (!finalAnswer) finalAnswer = await generateFinalAnswer(messages)
+
+        // beopmang 호출이 있었으면 출처 강제 지정
+        if (debugCalls.length > 0) {
+          finalAnswer = finalAnswer.replace(/<source>.*?<\/source>/g, '<source>api.beopmang.org</source>')
+        }
+
+        send('answer', { text: finalAnswer })
+      } catch (err) {
+        send('error', { message: err instanceof Error ? err.message : '서버 오류' })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }

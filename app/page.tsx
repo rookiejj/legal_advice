@@ -21,10 +21,12 @@ export default function Home() {
     setError(null)
     setSidebarOpen(false)
 
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now().toString(), role: 'user', content: userText },
-    ])
+    const userMsgId = Date.now().toString()
+    const asstMsgId = (Date.now() + 1).toString()
+
+    setMessages(prev => [...prev, { id: userMsgId, role: 'user', content: userText }])
+    // 빈 assistant 메시지 미리 추가 — 디버그 데이터를 실시간으로 채워넣음
+    setMessages(prev => [...prev, { id: asstMsgId, role: 'assistant', content: '', debug: [] }])
     setIsLoading(true)
 
     const controller = new AbortController()
@@ -42,33 +44,51 @@ export default function Home() {
         signal: controller.signal,
       })
 
-      const text = await res.text()
-      let data: { answer?: string; error?: string; debug?: DebugCall[] }
-      try {
-        data = JSON.parse(text)
-      } catch {
-        throw new Error('서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.')
+      if (!res.body) throw new Error('스트림 없음')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+
+        for (const part of parts) {
+          const eventMatch = part.match(/^event: (\w+)/)
+          const dataMatch = part.match(/^data: (.+)$/m)
+          if (!eventMatch || !dataMatch) continue
+
+          const event = eventMatch[1]
+          const data = JSON.parse(dataMatch[1])
+
+          if (event === 'debug') {
+            // 디버그 호출 즉시 패널에 추가
+            setMessages(prev => prev.map(m =>
+              m.id === asstMsgId
+                ? { ...m, debug: [...(m.debug ?? []), data as DebugCall] }
+                : m
+            ))
+          } else if (event === 'answer') {
+            setMessages(prev => prev.map(m =>
+              m.id === asstMsgId ? { ...m, content: data.text } : m
+            ))
+          } else if (event === 'error') {
+            setError(data.message)
+            // 에러가 나도 디버그 패널은 유지 (content만 비워둠)
+          }
+        }
       }
-
-      if (!res.ok) throw new Error(data.error || '서버 오류')
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: data.answer!,
-          debug: data.debug,
-        },
-      ])
     } catch (err) {
       const isAbort = (err as Error).name === 'AbortError'
-      if (isAbort && timeoutRef.current === null) return
-      if (isAbort) {
-        setError('응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.')
-      } else {
-        setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      if (!isAbort) {
+        setError(err instanceof Error ? err.message : '알 수 없는 오류')
       }
+      // AbortError(타임아웃)는 에러 메시지 없이 조용히 종료 — 디버그 패널은 남아있음
     } finally {
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
       setIsLoading(false)
@@ -89,11 +109,13 @@ export default function Home() {
       <Sidebar isOpen={sidebarOpen} onNewChat={handleNewChat} onCategoryClick={sendMessage} onClose={() => setSidebarOpen(false)} />
 
       <main className="flex flex-col flex-1 min-w-0">
-        <header className="flex items-center px-4 py-3 flex-shrink-0 gap-3" style={{ borderBottom: '1px solid #E2DDD5', background: '#F4F1EB' }}>
+        <header className="flex items-center px-4 py-3 flex-shrink-0 gap-3"
+          style={{ borderBottom: '1px solid #E2DDD5', background: '#F4F1EB' }}>
           <button className="md:hidden flex flex-col gap-1 p-1" onClick={() => setSidebarOpen(true)} aria-label="메뉴">
             {[0, 1, 2].map((i) => <span key={i} className="block w-5 h-0.5 rounded" style={{ background: '#1A1A1A' }} />)}
           </button>
-          <span className="md:hidden text-lg font-bold" style={{ fontFamily: 'Noto Serif KR, serif', color: '#1A3A1E' }}>법망</span>
+          <span className="md:hidden text-lg font-bold"
+            style={{ fontFamily: 'Noto Serif KR, serif', color: '#1A3A1E' }}>법망</span>
           <div className="flex items-center gap-1.5 ml-auto">
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#A8E063' }} />
             <span className="text-xs" style={{ color: '#6B6860' }}>api.beopmang.org 연동</span>
