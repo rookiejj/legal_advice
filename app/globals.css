@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background-color: #F8F6F1;
+  color: #1C1C1E;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1CFC8; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #A8A59E; }
+
+/* 마크다운 스타일 - AI 답변에 적용 */
+.prose-legal h1, .prose-legal h2, .prose-legal h3 {
+  font-family: 'Noto Serif KR', serif;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem;
+  color: #1C1C1E;
+}
+.prose-legal h2 { font-size: 1.05rem; border-bottom: 1px solid #E5E3DC; padding-bottom: 0.3rem; }
+.prose-legal h3 { font-size: 0.95rem; }
+.prose-legal p { margin: 0.5rem 0; line-height: 1.75; }
+.prose-legal ul, .prose-legal ol { margin: 0.5rem 0; padding-left: 1.4rem; }
+.prose-legal li { margin: 0.25rem 0; line-height: 1.7; }
+.prose-legal strong { font-weight: 600; color: #1C1C1E; }
+.prose-legal blockquote {
+  border-left: 3px solid #2563EB;
+  padding: 0.4rem 0.8rem;
+  margin: 0.75rem 0;
+  background: #EFF6FF;
+  border-radius: 0 4px 4px 0;
+  color: #1e40af;
+  font-size: 0.9rem;
+}
+.prose-legal code {
+  background: #F3F4F6;
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+  font-family: 'Courier New', monospace;
+  color: #374151;
+}
+.prose-legal a {
+  color: #2563EB;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
