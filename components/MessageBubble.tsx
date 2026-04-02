@@ -9,13 +9,22 @@ export type Message = {
   content: string
 }
 
+function parseSource(content: string): { text: string; source: string | null } {
+  const match = content.match(/<source>(.*?)<\/source>/)
+  if (!match) return { text: content.trim(), source: null }
+  return {
+    text: content.replace(/<source>.*?<\/source>/, '').trim(),
+    source: match[1],
+  }
+}
+
 export function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
         <div
           className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed"
-          style={{ background: '#2563EB', color: '#fff' }}
+          style={{ background: '#1A3A1E', color: '#E8F5D0' }}
         >
           {message.content}
         </div>
@@ -23,26 +32,41 @@ export function MessageBubble({ message }: { message: Message }) {
     )
   }
 
+  const { text, source } = parseSource(message.content)
+  const isPrimary = source === 'api.beopmang.org'
+
   return (
     <div className="flex gap-3">
-      {/* 아이콘 */}
       <div
         className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mt-1"
-        style={{ background: '#0F1117', color: '#fff', fontFamily: 'Noto Serif KR, serif' }}
+        style={{ background: '#A8E063', color: '#0A1F0E', fontFamily: 'Noto Serif KR, serif' }}
       >
         법
       </div>
-
-      {/* 답변 카드 */}
-      <div
-        className="flex-1 max-w-[85%] rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
-        style={{ background: '#fff', border: '1px solid #E5E3DC' }}
-      >
-        <div className="prose-legal">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {message.content}
-          </ReactMarkdown>
+      <div className="flex-1 max-w-[85%]">
+        <div
+          className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
+          style={{ background: '#fff', border: '1px solid #E2DDD5' }}
+        >
+          <div className="prose-legal">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+          </div>
         </div>
+        {/* 출처 뱃지 */}
+        {source && (
+          <div className="mt-1.5 flex justify-end">
+            <span
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{
+                background: isPrimary ? '#F0FAE0' : '#F3F4F6',
+                color: isPrimary ? '#3A7D1E' : '#9CA3AF',
+                border: `1px solid ${isPrimary ? '#C6E89A' : '#E5E7EB'}`,
+              }}
+            >
+              출처: {source}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -53,22 +77,23 @@ export function TypingIndicator() {
     <div className="flex gap-3">
       <div
         className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-        style={{ background: '#0F1117', color: '#fff', fontFamily: 'Noto Serif KR, serif' }}
+        style={{ background: '#A8E063', color: '#0A1F0E', fontFamily: 'Noto Serif KR, serif' }}
       >
         법
       </div>
       <div
-        className="rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm flex items-center gap-1"
-        style={{ background: '#fff', border: '1px solid #E5E3DC' }}
+        className="rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm"
+        style={{ background: '#fff', border: '1px solid #E2DDD5' }}
       >
-        <span className="text-xs text-gray-400 mr-1">법령 조회 중</span>
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="w-1.5 h-1.5 rounded-full bg-gray-300 animate-bounce"
-            style={{ animationDelay: `${i * 0.15}s` }}
-          />
-        ))}
+        <p className="text-xs mb-2" style={{ color: '#A8E063', fontWeight: 600 }}>
+          법령 조회 중 · 30초 내외 소요됩니다
+        </p>
+        <div className="flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce"
+              style={{ animationDelay: `${i * 0.15}s`, background: '#A8E063' }} />
+          ))}
+        </div>
       </div>
     </div>
   )
