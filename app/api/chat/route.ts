@@ -40,7 +40,6 @@ const BEOPMANG_TOOL: Anthropic.Tool = {
   },
 }
 
-// 시간 초과 시 수집된 메시지로 즉시 답변 생성
 async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<string> {
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -48,10 +47,7 @@ async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<
     system: LEGAL_CONSULTANT_SKILL,
     messages: [
       ...messages,
-      {
-        role: 'user',
-        content: '지금까지 조회한 법령 데이터를 바탕으로 답변을 완성해주세요. 추가 조회 없이 현재 수집된 내용으로만 답변하세요.',
-      },
+      { role: 'user', content: '지금까지 조회한 법령 데이터를 바탕으로 답변을 완성해주세요. 추가 조회 없이 현재 수집된 내용으로만 답변하세요.' },
     ],
   })
   return response.content
@@ -59,6 +55,8 @@ async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<
     .map(b => b.text)
     .join('')
 }
+
+type DebugCall = { command: string; params: Record<string, unknown>; result: string }
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,17 +66,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
     }
 
-    const messages: Anthropic.MessageParam[] = [
-      { role: 'user', content: message },
-    ]
+    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: message }]
+    const debugCalls: DebugCall[] = []
 
     const MAX_ROUNDS = 8
-    const TIME_LIMIT_MS = 50_000 // 50초 — 남은 10초로 최종 답변 생성
+    const TIME_LIMIT_MS = 50_000
     const startTime = Date.now()
     let finalAnswer = ''
 
     for (let i = 0; i < MAX_ROUNDS; i++) {
-      // 시간 초과 임박 → 지금까지 수집된 내용으로 답변 강제 생성
       if (Date.now() - startTime > TIME_LIMIT_MS) {
         finalAnswer = await generateFinalAnswer(messages)
         break
@@ -109,11 +105,9 @@ export async function POST(req: NextRequest) {
           toolUseBlocks.map(async (toolUse) => {
             const input = toolUse.input as { command: string; params?: Record<string, unknown> }
             const result = await callBeopmang(input.command, input.params ?? {})
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: toolUse.id,
-              content: result,
-            }
+            // 디버그용 호출 기록
+            debugCalls.push({ command: input.command, params: input.params ?? {}, result })
+            return { type: 'tool_result' as const, tool_use_id: toolUse.id, content: result }
           })
         )
 
@@ -122,16 +116,13 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // 다른 stop_reason (max_tokens 등) → 지금까지 수집된 내용으로 답변
       finalAnswer = await generateFinalAnswer(messages)
       break
     }
 
-    if (!finalAnswer) {
-      finalAnswer = await generateFinalAnswer(messages)
-    }
+    if (!finalAnswer) finalAnswer = await generateFinalAnswer(messages)
 
-    return NextResponse.json({ answer: finalAnswer })
+    return NextResponse.json({ answer: finalAnswer, debug: debugCalls })
   } catch (err: unknown) {
     console.error('[chat] error:', JSON.stringify(err, null, 2))
     const message = err instanceof Error ? err.message : '서버 오류가 발생했습니다.'
