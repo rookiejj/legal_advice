@@ -6,6 +6,9 @@ if (!process.env.ANTHROPIC_API_KEY) {
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  defaultHeaders: {
+    'anthropic-beta': 'mcp-client-1.0',
+  },
 })
 
 export const MODEL = 'claude-sonnet-4-5'

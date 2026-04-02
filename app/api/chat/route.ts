@@ -12,11 +12,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
     }
 
-    const response = await (anthropic.messages.create as Function)({
+    const response = await anthropic.beta.messages.create({
       model: MODEL,
       max_tokens: 2048,
       system: LEGAL_CONSULTANT_SKILL,
-      // web_search 대신 api.beopmang.org MCP 서버 직접 연결
       mcp_servers: [
         {
           type: 'url',
@@ -27,11 +26,12 @@ export async function POST(req: NextRequest) {
       messages: [
         { role: 'user', content: transformToLegalQuery(message) },
       ],
-    })
+      betas: ['mcp-client-1.0'],
+    } as Parameters<typeof anthropic.beta.messages.create>[0])
 
-    const answer = response.content
-      .filter((block: any) => block.type === 'text')
-      .map((block: any) => block.text)
+    const answer = (response.content as Array<{ type: string; text?: string }>)
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text ?? '')
       .join('')
 
     if (!answer) {
