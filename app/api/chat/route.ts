@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic'
-import { LEGAL_CONSULTANT_SKILL } from '@/skills/legal-consultant'
+import { LEGAL_CONSULTANT_SKILL, buildUserMessage } from '@/skills/legal-consultant'
 import { fetchLegalContext } from '@/lib/beopmang'
 
 export const maxDuration = 60
@@ -13,18 +13,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
     }
 
-    // api.beopmang.org 에서 직접 법령 데이터 fetch
+    // api.beopmang.org 에서 법령 조문 직접 fetch
     const legalContext = await fetchLegalContext(message)
-
-    const userContent = legalContext
-      ? `사용자 질문: ${message}\n\n--- api.beopmang.org 법령 데이터 ---\n${legalContext}`
-      : message
 
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 2048,
       system: LEGAL_CONSULTANT_SKILL,
-      messages: [{ role: 'user', content: userContent }],
+      messages: [
+        { role: 'user', content: buildUserMessage(message, legalContext) },
+      ],
     })
 
     const answer = response.content
