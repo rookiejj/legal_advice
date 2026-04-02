@@ -26,7 +26,7 @@ export function ChatWindow({ messages, isLoading, onExampleClick }: Props) {
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 overflow-y-auto pt-16">
+      <div className="flex-1 flex flex-col items-center justify-start px-6 pt-12 pb-6 overflow-y-auto">
         <div className="max-w-xl w-full">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 text-2xl font-bold"
