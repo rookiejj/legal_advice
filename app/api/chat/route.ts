@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic'
 import { LEGAL_CONSULTANT_SKILL, transformToLegalQuery } from '@/skills/legal-consultant'
-import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages'
 
 export const maxDuration = 60
 
@@ -13,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
     }
 
-    const response = await anthropic.beta.messages.create({
+    const response = await (anthropic.messages.create as Function)({
       model: MODEL,
       max_tokens: 2048,
       system: LEGAL_CONSULTANT_SKILL,
@@ -27,13 +26,11 @@ export async function POST(req: NextRequest) {
       messages: [
         { role: 'user', content: transformToLegalQuery(message) },
       ],
-      betas: ['mcp-client-1.0'],
-      stream: false,
-    } as Parameters<typeof anthropic.beta.messages.create>[0]) as BetaMessage
+    })
 
     const answer = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => (block as { type: 'text'; text: string }).text)
+      .filter((block: { type: string }) => block.type === 'text')
+      .map((block: { type: string; text: string }) => block.text)
       .join('')
 
     if (!answer) {
