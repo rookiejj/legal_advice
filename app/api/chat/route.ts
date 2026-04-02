@@ -3,7 +3,7 @@ import { anthropic, MODEL } from '@/lib/anthropic'
 import { LEGAL_CONSULTANT_SKILL } from '@/skills/legal-consultant'
 import type Anthropic from '@anthropic-ai/sdk'
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 const MCP_URL = 'https://api.beopmang.org/mcp'
 let reqId = 1
@@ -23,22 +23,41 @@ async function callBeopmang(command: string, params: Record<string, unknown> = {
   return json?.result?.content?.[0]?.text ?? '결과 없음'
 }
 
-// Claude 가 직접 호출할 수 있는 법망 툴 정의
 const BEOPMANG_TOOL: Anthropic.Tool = {
   name: 'beopmang_api',
   description: `api.beopmang.org 법령 API. 반드시 여러 번 호출하여 조문을 충분히 수집하세요.
 명령어:
 - law.search: 법령 검색. params: {q, limit?}
-- law.get: 조문 조회. params: {law_id, grep?} — grep으로 관련 조문만 추출
+- law.get: 조문 조회. params: {law_id, grep?}
 - tools.overview: 법령 종합. params: {law_id, q?}`,
   input_schema: {
     type: 'object' as const,
     properties: {
-      command: { type: 'string', description: 'law.search | law.get | tools.overview' },
-      params: { type: 'object', description: '명령어별 파라미터' },
+      command: { type: 'string' },
+      params: { type: 'object' },
     },
     required: ['command'],
   },
+}
+
+// 시간 초과 시 수집된 메시지로 즉시 답변 생성
+async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system: LEGAL_CONSULTANT_SKILL,
+    messages: [
+      ...messages,
+      {
+        role: 'user',
+        content: '지금까지 조회한 법령 데이터를 바탕으로 답변을 완성해주세요. 추가 조회 없이 현재 수집된 내용으로만 답변하세요.',
+      },
+    ],
+  })
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('')
 }
 
 export async function POST(req: NextRequest) {
@@ -53,11 +72,18 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: message },
     ]
 
-    // tool_use 루프 — Claude 가 충분히 조회할 때까지 반복
-    let finalAnswer = ''
     const MAX_ROUNDS = 8
+    const TIME_LIMIT_MS = 50_000 // 50초 — 남은 10초로 최종 답변 생성
+    const startTime = Date.now()
+    let finalAnswer = ''
 
     for (let i = 0; i < MAX_ROUNDS; i++) {
+      // 시간 초과 임박 → 지금까지 수집된 내용으로 답변 강제 생성
+      if (Date.now() - startTime > TIME_LIMIT_MS) {
+        finalAnswer = await generateFinalAnswer(messages)
+        break
+      }
+
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 4096,
@@ -75,7 +101,6 @@ export async function POST(req: NextRequest) {
       }
 
       if (response.stop_reason === 'tool_use') {
-        // Claude 가 요청한 툴 호출들을 모두 실행
         const toolUseBlocks = response.content.filter(
           (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
         )
@@ -97,19 +122,13 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // max_tokens 등 다른 stop_reason
-      finalAnswer = response.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-        .map(b => b.text)
-        .join('')
+      // 다른 stop_reason (max_tokens 등) → 지금까지 수집된 내용으로 답변
+      finalAnswer = await generateFinalAnswer(messages)
       break
     }
 
     if (!finalAnswer) {
-      return NextResponse.json(
-        { error: '답변을 생성하지 못했습니다. 다시 시도해주세요.' },
-        { status: 500 }
-      )
+      finalAnswer = await generateFinalAnswer(messages)
     }
 
     return NextResponse.json({ answer: finalAnswer })
