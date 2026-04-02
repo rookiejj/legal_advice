@@ -12,19 +12,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 })
     }
 
-    const response = await anthropic.messages.create({
+    const response = await (anthropic.messages.create as Function)({
       model: MODEL,
       max_tokens: 2048,
       system: LEGAL_CONSULTANT_SKILL,
-      tools: [{ type: 'web_search_20250305' as const, name: 'web_search' }] as never,
+      // web_search 대신 api.beopmang.org MCP 서버 직접 연결
+      mcp_servers: [
+        {
+          type: 'url',
+          url: 'https://api.beopmang.org/mcp',
+          name: 'beopmang',
+        },
+      ],
       messages: [
         { role: 'user', content: transformToLegalQuery(message) },
       ],
     })
 
     const answer = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => (block as { type: 'text'; text: string }).text)
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text)
       .join('')
 
     if (!answer) {
