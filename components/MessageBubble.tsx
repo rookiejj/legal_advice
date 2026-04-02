@@ -86,7 +86,7 @@ export function TypingIndicator() {
         style={{ background: '#fff', border: '1px solid #E2DDD5' }}
       >
         <p className="text-xs mb-2" style={{ color: '#A8E063', fontWeight: 600 }}>
-          법령 조회 중 · 30초 내외 소요됩니다
+          법령 조회 중 · 1분 내외 소요됩니다
         </p>
         <div className="flex items-center gap-1">
           {[0, 1, 2].map((i) => (
