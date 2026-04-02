@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic'
 import { LEGAL_CONSULTANT_SKILL, transformToLegalQuery } from '@/skills/legal-consultant'
+import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages'
 
 export const maxDuration = 60
 
@@ -27,11 +28,12 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: transformToLegalQuery(message) },
       ],
       betas: ['mcp-client-1.0'],
-    } as Parameters<typeof anthropic.beta.messages.create>[0])
+      stream: false,
+    } as Parameters<typeof anthropic.beta.messages.create>[0]) as BetaMessage
 
-    const answer = (response.content as Array<{ type: string; text?: string }>)
+    const answer = response.content
       .filter((block) => block.type === 'text')
-      .map((block) => block.text ?? '')
+      .map((block) => (block as { type: 'text'; text: string }).text)
       .join('')
 
     if (!answer) {
