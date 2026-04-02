@@ -10,23 +10,36 @@ const CLIENT_TIMEOUT_MS = 75_000
 
 // 수집된 debug 데이터로 간단한 폴백 답변 생성
 function buildFallbackAnswer(debugCalls: DebugCall[]): string {
-  const lines: string[] = ['수집된 법령 데이터를 기반으로 정리합니다.\n']
+  const sections: string[] = []
+
   for (const call of debugCalls) {
-    if (call.command !== 'law.get' && call.command !== 'tools.overview') continue
+    if (call.command !== 'law.get') continue
     try {
       const data = JSON.parse(call.result)
-      if (data.law_name) lines.push(`### 「${data.law_name}」`)
-      if (data.articles?.length) {
-        for (const a of data.articles) {
-          if (a.full_text) lines.push(`**${a.label}** ${a.full_text}`)
-        }
-        lines.push('')
+      if (!data.articles?.length) continue
+
+      const lawName = data.law_name ?? ''
+      const articleLines = data.articles
+        .filter((a: { full_text?: string }) => a.full_text?.trim())
+        .map((a: { full_text: string }) => {
+          // full_text 에 이미 조문번호 포함 — 그대로 사용
+          const text = a.full_text.trim()
+          // 첫 번째 닫는 괄호까지가 제목, 나머지가 내용
+          const titleEnd = text.indexOf(')')
+          if (titleEnd > 0) {
+            return `**${text.slice(0, titleEnd + 1)}**${text.slice(titleEnd + 1)}`
+          }
+          return text
+        })
+
+      if (articleLines.length > 0) {
+        sections.push(`### 「${lawName}」\n\n${articleLines.join('\n\n')}`)
       }
     } catch { /* skip */ }
   }
-  if (lines.length <= 1) return ''
-  lines.push('\n<source>api.beopmang.org</source>')
-  return lines.join('\n')
+
+  if (sections.length === 0) return ''
+  return sections.join('\n\n---\n\n') + '\n\n<source>api.beopmang.org</source>'
 }
 
 export default function Home() {
