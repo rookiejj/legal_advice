@@ -119,7 +119,7 @@ export function MessageBubble({ message }: { message: Message }) {
   const emptyMessage = isErrorContent
     ? '서버 오류로 답변을 가져오지 못했습니다. 다시 시도해주세요.'
     : hasDebug
-      ? '답변을 생성하지 못했습니다. 아래 법망 호출 내역을 확인하세요.'
+      ? '답변을 생성하지 못했습니다. 아래 묻다 호출 내역을 확인하세요.'
       : '답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
 
   return (
@@ -154,7 +154,7 @@ export function MessageBubble({ message }: { message: Message }) {
                   color: debugOpen ? '#A8E063' : '#3A7D1E',
                   border: '1px solid #C6E89A',
                 }}>
-                {debugOpen ? '▲ 닫기' : '▼ 법망 호출 내역'} ({message.debug!.length}회)
+                {debugOpen ? '▲ 닫기' : '▼ 묻다 호출 내역'} ({message.debug!.length}회)
               </button>
             )}
             {source && text.trim() && (

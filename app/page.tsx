@@ -219,7 +219,7 @@ export default function Home() {
             {[0, 1, 2].map((i) => <span key={i} className="block w-5 h-0.5 rounded" style={{ background: '#1A1A1A' }} />)}
           </button>
           <span className="md:hidden text-lg font-bold"
-            style={{ fontFamily: 'Noto Serif KR, serif', color: '#1A3A1E' }}>법망</span>
+            style={{ fontFamily: 'Noto Serif KR, serif', color: '#1A3A1E' }}>묻다</span>
           <div className="flex items-center gap-1.5 ml-auto">
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#A8E063' }} />
             <span className="text-xs" style={{ color: '#6B6860' }}>api.beopmang.org 연동</span>

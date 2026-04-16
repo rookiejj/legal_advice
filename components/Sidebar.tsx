@@ -30,7 +30,7 @@ export function Sidebar({ isOpen, onNewChat, onCategoryClick, onClose }: Props) 
         >
             <div className="flex items-center justify-between px-5 pt-6 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 <div>
-                    <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Noto Serif KR, serif' }}>법망</div>
+                    <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Noto Serif KR, serif' }}>묻다</div>
                     <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>AI 법률 정보 서비스</div>
                 </div>
                 <button className="md:hidden p-1 rounded opacity-50 hover:opacity-100" onClick={onClose} aria-label="닫기">

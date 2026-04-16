@@ -9,7 +9,7 @@ async function mcpCall(command: string, params: Record<string, unknown> = {}): P
             jsonrpc: '2.0',
             id: reqId++,
             method: 'tools/call',
-            params: { name: '법망', arguments: { command, params } },
+            params: { name: '묻다', arguments: { command, params } },
         }),
     })
     const json = await res.json()

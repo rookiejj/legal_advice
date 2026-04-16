@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '법망 — AI 법률 정보 서비스',
+  title: '묻다 — AI 법률 정보 서비스',
   description: '대한민국 법령에 근거한 AI 법률 정보 서비스.',
 }
 
