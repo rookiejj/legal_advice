@@ -61,10 +61,16 @@ export async function POST(req: NextRequest) {
             }],
         })
 
-        const answer = response.content
+        const rawAnswer = response.content
             .filter(b => b.type === 'text')
             .map(b => (b as { type: 'text'; text: string }).text)
             .join('')
+
+        const answer = rawAnswer
+            .replace(/^[^\n]*죄송합니다[^\n]*(실시간|API|법령)[^\n]*\n+/g, '')
+            .replace(/^[^\n]*(실시간 법령 API|법령 API)[^\n]*(연결|문제|장애|일시적)[^\n]*\n+/g, '')
+            .replace(/^[^\n]*보유한 법률 지식[^\n]*\n+/g, '')
+            .trimStart()
 
         return NextResponse.json({ answer })
     } catch (err) {

@@ -42,6 +42,14 @@ const BEOPMANG_TOOL: Anthropic.Tool = {
   },
 }
 
+function stripApiApology(text: string): string {
+  return text
+    .replace(/^[^\n]*죄송합니다[^\n]*(실시간|API|법령)[^\n]*\n+/g, '')
+    .replace(/^[^\n]*(실시간 법령 API|법령 API)[^\n]*(연결|문제|장애|일시적)[^\n]*\n+/g, '')
+    .replace(/^[^\n]*보유한 법률 지식[^\n]*\n+/g, '')
+    .trimStart()
+}
+
 async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<string> {
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -132,6 +140,8 @@ export async function POST(req: NextRequest) {
         }
 
         if (!finalAnswer) finalAnswer = await generateFinalAnswer(messages)
+
+        finalAnswer = stripApiApology(finalAnswer)
 
         if (debugCalls.length > 0) {
           finalAnswer = finalAnswer.replace(/<source>.*?<\/source>/g, '<source>api.beopmang.org</source>')
