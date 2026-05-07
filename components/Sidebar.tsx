@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 const SIDEBAR_CATEGORIES = [
     { emoji: '🏠', label: '임대차' },
     { emoji: '💼', label: '노동·고용' },
@@ -17,25 +19,35 @@ type Props = {
 }
 
 export function Sidebar({ isOpen, onNewChat, onCategoryClick, onClose }: Props) {
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const isMobile = window.matchMedia('(max-width: 767px)').matches
+        if (isOpen && isMobile) {
+            const prev = document.body.style.overflow
+            document.body.style.overflow = 'hidden'
+            return () => { document.body.style.overflow = prev }
+        }
+    }, [isOpen])
+
     return (
         <aside
             className={`
         fixed md:static inset-y-0 left-0 z-30
-        flex flex-col w-64 flex-shrink-0
+        flex flex-col w-[82vw] max-w-[300px] md:w-64 flex-shrink-0
         transform transition-transform duration-300 ease-in-out
         md:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}
-            style={{ background: '#0F1117', color: '#fff' }}
+            style={{ background: '#0F1117', color: '#fff', paddingTop: 'env(safe-area-inset-top)' }}
         >
             <div className="flex items-center justify-between px-5 pt-6 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 <div>
                     <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Noto Serif KR, serif' }}>묻다</div>
                     <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>AI 법률 정보 서비스</div>
                 </div>
-                <button className="md:hidden p-1 rounded opacity-50 hover:opacity-100" onClick={onClose} aria-label="닫기">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <path d="M18 6L6 18M6 6l12 12" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+                <button className="md:hidden p-2 -m-2 rounded opacity-60 active:opacity-100" onClick={onClose} aria-label="닫기">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
                 </button>
             </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, KeyboardEvent } from 'react'
+import { useState, useRef, useEffect, KeyboardEvent } from 'react'
 
 type Props = {
   onSend: (message: string) => void
@@ -11,7 +11,16 @@ type Props = {
 
 export function InputBar({ onSend, onStop, disabled, isLoading }: Props) {
   const [value, setValue] = useState('')
+  const [isMobile, setIsMobile] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   const handleSend = () => {
     const trimmed = value.trim()
@@ -51,7 +60,9 @@ export function InputBar({ onSend, onStop, disabled, isLoading }: Props) {
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           disabled={isLoading}
-          placeholder={isLoading ? '법령 조회 중... (1분 내외 소요)' : '궁금한 법률 내용을 입력하세요...'}
+          placeholder={isLoading
+            ? (isMobile ? '법령 조회 중...' : '법령 조회 중... (1분 내외 소요)')
+            : (isMobile ? '법률 질문을 입력하세요' : '궁금한 법률 내용을 입력하세요...')}
           rows={1}
           className="flex-1 resize-none bg-transparent leading-relaxed outline-none placeholder-gray-400 py-1.5"
           style={{ fontFamily: 'Noto Sans KR, sans-serif', maxHeight: '120px', color: '#1A1A1A', fontSize: '16px' }}
@@ -84,7 +95,7 @@ export function InputBar({ onSend, onStop, disabled, isLoading }: Props) {
           </button>
         )}
       </div>
-      <p className="text-center text-xs mt-2" style={{ color: '#A8A49C' }}>
+      <p className="text-center text-[11px] sm:text-xs mt-2 leading-snug px-2" style={{ color: '#A8A49C' }}>
         법적 효력이 있는 공식 자문이 아닙니다. 중요한 결정은 전문 변호사와 상담하세요.
       </p>
     </div>

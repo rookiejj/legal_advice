@@ -213,16 +213,20 @@ export default function Home() {
       <Sidebar isOpen={sidebarOpen} onNewChat={handleNewChat} onCategoryClick={sendMessage} onClose={() => setSidebarOpen(false)} />
 
       <main className="flex flex-col flex-1 min-w-0">
-        <header className="flex items-center px-4 py-3 flex-shrink-0 gap-3"
+        <header className="flex items-center px-3 sm:px-4 py-2.5 sm:py-3 flex-shrink-0 gap-2 sm:gap-3"
           style={{ borderBottom: '1px solid #E2DDD5', background: '#ECF3E8' }}>
-          <button className="md:hidden flex flex-col gap-1 p-1" onClick={() => setSidebarOpen(true)} aria-label="메뉴">
+          <button className="md:hidden flex flex-col gap-1 p-2 -ml-2 rounded-md active:bg-black/5"
+            onClick={() => setSidebarOpen(true)} aria-label="메뉴">
             {[0, 1, 2].map((i) => <span key={i} className="block w-5 h-0.5 rounded" style={{ background: '#1A1A1A' }} />)}
           </button>
           <span className="md:hidden text-lg font-bold"
             style={{ fontFamily: 'Noto Serif KR, serif', color: '#1A3A1E' }}>묻다</span>
-          <div className="flex items-center gap-1.5 ml-auto">
-            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#A8E063' }} />
-            <span className="text-xs" style={{ color: '#6B6860' }}>api.beopmang.org 연동</span>
+          <div className="flex items-center gap-1.5 ml-auto min-w-0">
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0" style={{ background: '#A8E063' }} />
+            <span className="text-xs truncate" style={{ color: '#6B6860' }}>
+              <span className="hidden sm:inline">api.beopmang.org 연동</span>
+              <span className="sm:hidden">실시간 연동</span>
+            </span>
           </div>
         </header>
 

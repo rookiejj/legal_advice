@@ -96,6 +96,42 @@ body {
   color: #3A7D1E;
   text-decoration: underline;
   text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.prose-legal pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.prose-legal table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.prose-legal img {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  .prose-legal h2 {
+    font-size: 1rem;
+  }
+  .prose-legal h3 {
+    font-size: 0.92rem;
+  }
+  .prose-legal p,
+  .prose-legal li {
+    line-height: 1.7;
+  }
+  .prose-legal blockquote {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.7rem;
+  }
 }
 
 /* 인앱브라우저 뷰포트 높이 대응 */

@@ -42,9 +42,9 @@ function formatResult(raw: string): string {
 function DebugPanel({ calls }: { calls: DebugCall[] }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   return (
-    <div className="mt-2 rounded-xl overflow-hidden text-xs"
+    <div className="mt-2 rounded-xl overflow-hidden text-[11px] sm:text-xs"
       style={{ border: '1px solid #C6E89A', background: '#F7FCF0' }}>
-      <div className="px-3 py-2 flex items-center gap-2"
+      <div className="px-3 py-2 flex items-center gap-2 flex-wrap"
         style={{ background: '#EDF7DC', borderBottom: '1px solid #DCF0C0' }}>
         <span style={{ color: '#3A7D1E', fontWeight: 600 }}>api.beopmang.org 호출 내역</span>
         <span style={{ color: '#6B9A3E' }}>총 {calls.length}회</span>
@@ -64,13 +64,15 @@ function DebugPanel({ calls }: { calls: DebugCall[] }) {
         return (
           <div key={i} style={{ borderBottom: i < calls.length - 1 ? '1px solid #DCF0C0' : 'none' }}>
             <button onClick={() => setOpenIndex(isOpen ? null : i)}
-              className="w-full text-left px-3 py-2 flex items-center gap-2 font-mono transition-all"
+              className="w-full text-left px-3 py-2 flex items-start gap-2 font-mono transition-all min-w-0"
               style={{ background: isOpen ? '#E4F5CC' : 'transparent' }}>
-              <span style={{ color: '#3A7D1E', fontWeight: 700, minWidth: 20 }}>#{i + 1}</span>
-              <span style={{ color: '#1A3A1E', fontWeight: 600 }}>{call.command}</span>
-              <span style={{ color: '#6B9A3E', flex: 1 }}>{JSON.stringify(call.params)}</span>
-              {summary && <span style={{ color: '#3A7D1E', fontWeight: 500 }}>{summary}</span>}
-              <span style={{ color: '#A8C87A', marginLeft: 4 }}>{isOpen ? '▲' : '▼'}</span>
+              <span style={{ color: '#3A7D1E', fontWeight: 700, minWidth: 20, flexShrink: 0 }}>#{i + 1}</span>
+              <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span style={{ color: '#1A3A1E', fontWeight: 600 }}>{call.command}</span>
+                <span className="truncate max-w-full" style={{ color: '#6B9A3E' }}>{JSON.stringify(call.params)}</span>
+                {summary && <span style={{ color: '#3A7D1E', fontWeight: 500 }}>{summary}</span>}
+              </span>
+              <span style={{ color: '#A8C87A', flexShrink: 0 }}>{isOpen ? '▲' : '▼'}</span>
             </button>
             {isOpen && (
               <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap break-all"
@@ -94,7 +96,7 @@ export function MessageBubble({ message }: { message: Message }) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed"
+        <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed break-words whitespace-pre-wrap"
           style={{ background: '#1A3A1E', color: '#E8F5D0' }}>
           {message.content}
         </div>
@@ -123,14 +125,14 @@ export function MessageBubble({ message }: { message: Message }) {
       : '답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-2 sm:gap-3">
       <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mt-1"
         style={{ background: '#A8E063', color: '#0A1F0E', fontFamily: 'Noto Serif KR, serif' }}>
         법
       </div>
-      <div className="flex-1 max-w-[85%]">
+      <div className="flex-1 min-w-0">
         {(text.trim() || isEmpty) && (
-          <div className="rounded-2xl rounded-tl-sm px-5 py-4 text-sm shadow-sm"
+          <div className="rounded-2xl rounded-tl-sm px-4 py-3 sm:px-5 sm:py-4 text-sm shadow-sm break-words"
             style={{ background: '#F7FAF4', border: '1px solid #D4E8C8' }}>
             {isEmpty ? (
               <p className="text-xs" style={{ color: '#A8A49C' }}>{emptyMessage}</p>
@@ -145,7 +147,7 @@ export function MessageBubble({ message }: { message: Message }) {
         )}
 
         {(hasDebug || (source && text.trim())) && (
-          <div className="mt-1.5 flex items-center justify-between gap-2">
+          <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
             {hasDebug && (
               <button onClick={() => setDebugOpen(v => !v)}
                 className="text-xs px-2 py-0.5 rounded-full transition-all"
