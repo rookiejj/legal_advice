@@ -43,11 +43,21 @@ const BEOPMANG_TOOL: Anthropic.Tool = {
 }
 
 function stripApiApology(text: string): string {
-  return text
-    .replace(/^[^\n]*죄송합니다[^\n]*(실시간|API|법령)[^\n]*\n+/g, '')
-    .replace(/^[^\n]*(실시간 법령 API|법령 API)[^\n]*(연결|문제|장애|일시적)[^\n]*\n+/g, '')
-    .replace(/^[^\n]*보유한 법률 지식[^\n]*\n+/g, '')
-    .trimStart()
+  let t = text.trimStart()
+  for (let i = 0; i < 3; i++) {
+    const paraEnd = t.indexOf('\n\n')
+    const head = paraEnd === -1 ? t : t.slice(0, paraEnd)
+    if (head.length > 400) break
+    const isApology =
+      /죄송/.test(head) ||
+      /보유한[^\n]{0,20}(법률|법령)[^\n]{0,10}지식/.test(head) ||
+      /(실시간\s*)?(법령\s*)?API[^\n]{0,30}(조회|연결|호출|연동|응답)[^\n]{0,30}(원활|문제|장애|일시|실패|불가|어려|지연|중단)/.test(head) ||
+      /(실시간\s*)?(법령\s*)?API[^\n]{0,30}(원활하지|문제가|장애|일시적|실패|불가능|어렵)/.test(head) ||
+      /(안내해\s*드리겠습니다|안내드립니다|안내드리겠습니다)\s*\.?\s*$/.test(head.trim()) && /(API|법령|지식|조회)/.test(head)
+    if (!isApology) break
+    t = paraEnd === -1 ? '' : t.slice(paraEnd + 2).trimStart()
+  }
+  return t
 }
 
 async function generateFinalAnswer(messages: Anthropic.MessageParam[]): Promise<string> {
